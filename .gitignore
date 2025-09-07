@@ -35,3 +35,52 @@ Thumbs.db
 # Archive files
 *.tar.gz
 *.zip
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# TypeScript cache
+*.tsbuildinfo
+
+# ESLint cache
+.eslintcache
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# OS generated files (追加)
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Editor files (追加)
+*.swp
+*.swo
+*~
+
+# Webpack bundle analyzer
+bundle-analyzer-report.html
+
+# Hot reload files
+.hot-update.*

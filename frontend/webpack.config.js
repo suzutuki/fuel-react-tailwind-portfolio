@@ -12,9 +12,9 @@ module.exports = {
         publicPath: "/",
     },
     resolve: {
-        extensions: [".tsx", ".ts", ".js"],
+        extensions: [".tsx", ".ts", ".js", ".jsx"],
         alias: {
-            "@": path.resolve(__dirname, "./src"),
+            "@": path.resolve(__dirname, "src"),
         },
     },
     module: {
