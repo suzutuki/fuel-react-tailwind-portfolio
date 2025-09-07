@@ -1,6 +1,19 @@
-import React from "react";
+import React, { useState } from "react";
+import { Button } from "@/components/ui/button";
+import OrderFormApp from "./OrderFormApp"; // 受注フォームコンポーネントをインポート
 
 const Home: React.FC = () => {
+    const [showOrderForm, setShowOrderForm] = useState(false);
+
+    const handleStartClick = () => {
+        setShowOrderForm(true);
+    };
+
+    // 受注フォームが表示されている場合は、フォームを表示
+    if (showOrderForm) {
+        return <OrderFormApp />;
+    }
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
             {/* Header */}
@@ -9,7 +22,8 @@ const Home: React.FC = () => {
                     <div className="flex items-center justify-between">
                         <div className="flex items-center">
                             <h1 className="text-2xl font-bold text-gray-800">
-                                FuelPHP + React App
+                                FuelPHP、React、TypeScript、TailwindCSS
+                                shadcn/ui
                             </h1>
                         </div>
                         <nav>
@@ -18,7 +32,7 @@ const Home: React.FC = () => {
                                     href="#"
                                     className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
                                 >
-                                    ホームだで
+                                    ホーム
                                 </a>
                                 <a
                                     href="#"
@@ -45,7 +59,8 @@ const Home: React.FC = () => {
                         ようこそ！
                     </h2>
                     <p className="text-xl text-gray-600 mb-8">
-                        FuelPHP、React、TypeScript、TailwindCSSで構築されたアプリケーションです
+                        FuelPHP、React、TypeScript、TailwindCSS
+                        shadcn/uiで構築されたアプリケーションです
                     </p>
 
                     {/* Feature Cards */}
@@ -119,9 +134,13 @@ const Home: React.FC = () => {
 
                     {/* Call to Action */}
                     <div className="mt-12">
-                        <button className="bg-indigo-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition duration-200">
+                        <Button
+                            size="lg"
+                            className="px-8 py-3 text-lg font-semibold"
+                            onClick={handleStartClick}
+                        >
                             始めましょう
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </main>
@@ -131,8 +150,7 @@ const Home: React.FC = () => {
                 <div className="container mx-auto px-6">
                     <div className="text-center">
                         <p>
-                            &copy; 2024 FuelPHP + React App. All rights
-                            reserved.
+                            &copy; 2024 suzutuki-portfolio. All rights reserved.
                         </p>
                     </div>
                 </div>
