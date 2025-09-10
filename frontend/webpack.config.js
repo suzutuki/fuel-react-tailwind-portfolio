@@ -82,6 +82,14 @@ module.exports = {
         devMiddleware: {
             writeToDisk: false,
         },
+        proxy: [
+            {
+                context: ['/api'],
+                target: 'http://localhost',
+                changeOrigin: true,
+                secure: false,
+            },
+        ],
     },
     watchOptions: {
         poll: 1000,
