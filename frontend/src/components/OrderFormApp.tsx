@@ -15,12 +15,15 @@ const OrderFormApp: React.FC = () => {
     const {
         formData,
         orderDetails,
+        isLoading,
+        saveStatus,
         handleInputChange,
         handleDetailChange,
         addOrderDetail,
         removeOrderDetail,
         resetForm,
         submitForm,
+        saveDraft,
     } = useOrderForm();
 
     const handleReset = () => {
@@ -146,20 +149,46 @@ const OrderFormApp: React.FC = () => {
                             </TabsContent>
                         </Tabs>
 
+                        {/* Save Status */}
+                        {saveStatus !== 'idle' && (
+                            <div className="text-center mb-4">
+                                {saveStatus === 'saving' && (
+                                    <p className="text-blue-600">保存中...</p>
+                                )}
+                                {saveStatus === 'saved' && (
+                                    <p className="text-green-600">正常に保存されました</p>
+                                )}
+                                {saveStatus === 'error' && (
+                                    <p className="text-red-600">保存に失敗しました</p>
+                                )}
+                            </div>
+                        )}
+
                         {/* Form Actions */}
                         <div className="flex justify-center space-x-4 mt-8 pt-6 border-t">
                             <Button
                                 onClick={submitForm}
                                 size="lg"
                                 className="px-8 py-3 text-lg bg-green-600 hover:bg-green-700"
+                                disabled={isLoading}
                             >
-                                登録
+                                {isLoading ? "保存中..." : "登録"}
+                            </Button>
+                            <Button
+                                onClick={saveDraft}
+                                variant="outline"
+                                size="lg"
+                                className="px-6 py-3 text-lg bg-blue-600 hover:bg-blue-700 text-white"
+                                disabled={isLoading}
+                            >
+                                下書き保存
                             </Button>
                             <Button
                                 onClick={handleReset}
                                 variant="outline"
                                 size="lg"
                                 className="px-8 py-3 text-lg"
+                                disabled={isLoading}
                             >
                                 リセット
                             </Button>

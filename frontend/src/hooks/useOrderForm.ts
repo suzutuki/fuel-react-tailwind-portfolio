@@ -2,6 +2,9 @@ import { useState } from "react";
 import { OrderDetail, FormData } from "@/types/orderForm";
 import { DEFAULT_VALUES } from "@/constants/orderFormConstants";
 
+// API設定
+const API_BASE_URL = "/api/orders";
+
 const createDefaultOrderDetail = (id: number): OrderDetail => ({
     id,
     productSearch: "",
@@ -61,6 +64,8 @@ export const useOrderForm = () => {
     const [orderDetails, setOrderDetails] = useState<OrderDetail[]>([
         createDefaultOrderDetail(1),
     ]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
     const handleInputChange = (field: keyof FormData, value: string) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
@@ -92,18 +97,64 @@ export const useOrderForm = () => {
         setOrderDetails([createDefaultOrderDetail(1)]);
     };
 
-    const submitForm = () => {
-        alert("受注が正常に登録されました。");
+    const submitForm = async () => {
+        setIsLoading(true);
+        setSaveStatus('saving');
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/create`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    formData,
+                    orderDetails
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            if (result.success) {
+                setSaveStatus('saved');
+                alert(`受注が正常に登録されました。受注ID: ${result.order_id}`);
+                
+                // フォームをリセット
+                resetForm();
+                setSaveStatus('idle');
+            } else {
+                throw new Error(result.message || 'データの保存に失敗しました');
+            }
+
+        } catch (error) {
+            console.error('Submit error:', error);
+            setSaveStatus('error');
+            alert(error instanceof Error ? error.message : 'データの保存に失敗しました');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const saveDraft = async () => {
+        // 下書き保存機能（将来実装予定）
+        console.log('下書き保存機能は今後実装予定です');
     };
 
     return {
         formData,
         orderDetails,
+        isLoading,
+        saveStatus,
         handleInputChange,
         handleDetailChange,
         addOrderDetail,
         removeOrderDetail,
         resetForm,
         submitForm,
+        saveDraft,
     };
 };
