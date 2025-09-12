@@ -10,7 +10,11 @@ import { DeliveryInfoSection } from "@/components/sections/DeliveryInfoSection";
 import { ContactMethodSection } from "@/components/sections/ContactMethodSection";
 import { OrderDetailCard } from "@/components/order/OrderDetailCard";
 
-const OrderFormApp: React.FC = () => {
+interface OrderFormAppProps {
+    onBack?: () => void;
+}
+
+const OrderFormApp: React.FC<OrderFormAppProps> = ({ onBack }) => {
     const [currentTab, setCurrentTab] = useState("basic");
     const {
         formData,
@@ -39,6 +43,15 @@ const OrderFormApp: React.FC = () => {
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
             <div className="max-w-7xl mx-auto">
+                {/* Back Button */}
+                {onBack && (
+                    <div className="mb-4">
+                        <Button onClick={onBack} variant="outline">
+                            ← ホームに戻る
+                        </Button>
+                    </div>
+                )}
+                
                 {/* Header */}
                 <Card className="mb-6">
                     <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
