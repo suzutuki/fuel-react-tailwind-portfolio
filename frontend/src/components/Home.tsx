@@ -1,17 +1,43 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import OrderFormApp from "./OrderFormApp"; // 受注フォームコンポーネントをインポート
+import OrderFormApp from "./OrderFormApp";
+import OrderList from "./OrderList";
+
+type PageType = 'home' | 'orderForm' | 'orderList';
 
 const Home: React.FC = () => {
-    const [showOrderForm, setShowOrderForm] = useState(false);
+    const [currentPage, setCurrentPage] = useState<PageType>('home');
 
     const handleStartClick = () => {
-        setShowOrderForm(true);
+        setCurrentPage('orderForm');
     };
 
-    // 受注フォームが表示されている場合は、フォームを表示
-    if (showOrderForm) {
-        return <OrderFormApp />;
+    const handleOrderListClick = () => {
+        setCurrentPage('orderList');
+    };
+
+    const handleBackToHome = () => {
+        setCurrentPage('home');
+    };
+
+    // ページの表示制御
+    if (currentPage === 'orderForm') {
+        return <OrderFormApp onBack={handleBackToHome} />;
+    }
+
+    if (currentPage === 'orderList') {
+        return (
+            <div>
+                <div className="bg-white shadow-lg mb-4">
+                    <div className="container mx-auto px-6 py-4">
+                        <Button onClick={handleBackToHome} variant="outline">
+                            ← ホームに戻る
+                        </Button>
+                    </div>
+                </div>
+                <OrderList />
+            </div>
+        );
     }
 
     return (
@@ -28,24 +54,24 @@ const Home: React.FC = () => {
                         </div>
                         <nav>
                             <div className="flex items-center space-x-4">
-                                <a
-                                    href="#"
+                                <button
+                                    onClick={() => setCurrentPage('home')}
                                     className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
                                 >
                                     ホーム
-                                </a>
-                                <a
-                                    href="#"
+                                </button>
+                                <button
+                                    onClick={handleOrderListClick}
                                     className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
                                 >
-                                    About
-                                </a>
-                                <a
-                                    href="#"
+                                    受注一覧
+                                </button>
+                                <button
+                                    onClick={handleStartClick}
                                     className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
                                 >
-                                    Contact
-                                </a>
+                                    新規受注
+                                </button>
                             </div>
                         </nav>
                     </div>
