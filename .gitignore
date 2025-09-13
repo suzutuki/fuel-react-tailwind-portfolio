@@ -84,3 +84,16 @@ bundle-analyzer-report.html
 
 # Hot reload files
 .hot-update.*
+
+# AWS CLI installation files (temporary)
+aws/
+awscliv2.zip
+
+# AWS Infrastructure - Sensitive files
+aws-infrastructure/logs/
+*.pem
+*.key
+
+# AWS Infrastructure - Environment specific configs
+aws-infrastructure/config/*-config.sh
+!aws-infrastructure/config/deploy-config.sh
