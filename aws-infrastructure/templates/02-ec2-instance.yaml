@@ -1,0 +1,344 @@
+# ===================================================================
+# CloudFormation テンプレート: EC2インスタンス（Webサーバー）
+#
+# 目的: FuelPHP + React アプリケーション用のWebサーバー構築
+# 構成: EC2 t3.micro + Nginx + PHP-FPM + Node.js
+# 費用: 完全無料（AWS無料ティア範囲内）
+# 依存: 01-vpc-network.yaml のVPCスタックが必要
+# ===================================================================
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'EC2 Web Server for Portfolio (Free Tier)'
+
+# ===================================================================
+# パラメーター: デプロイ時に変更可能な値
+# ===================================================================
+Parameters:
+  ProjectName:
+    Type: String
+    Default: 'portfolio'
+    Description: 'プロジェクト名（リソース名のプレフィックス）'
+
+  Environment:
+    Type: String
+    Default: 'prod'
+    AllowedValues: ['dev', 'staging', 'prod']
+    Description: '環境名（開発・ステージング・本番）'
+
+  NetworkStackName:
+    Type: String
+    Default: 'portfolio-network'
+    Description: 'VPCスタック名（01-vpc-network.yamlで作成したスタック名）'
+    # このパラメーターで他のスタックのリソースを参照
+
+  KeyPairName:
+    Type: String
+    Description: 'SSH接続用のEC2キーペア名（事前にAWSコンソールで作成が必要）'
+    # 例: my-keypair
+    # 注意: CloudFormationではキーペアの作成はできないため事前作成必須
+
+  InstanceType:
+    Type: String
+    Default: 't3.micro'
+    AllowedValues: ['t2.micro', 't3.micro', 't3.small']
+    Description: 'EC2インスタンスタイプ（無料枠: t2.micro または t3.micro）'
+
+# ===================================================================
+# マッピング: 地域別の設定値
+# ===================================================================
+Mappings:
+  # 地域別AMI ID マッピング
+  # Amazon Linux 2の最新AMI（地域によって異なる）
+  RegionMap:
+    us-east-1:      # バージニア北部
+      AMI: ami-0abcdef1234567890  # 例: Amazon Linux 2 AMI
+    us-west-2:      # オレゴン
+      AMI: ami-0fedcba0987654321  # 例: Amazon Linux 2 AMI
+    ap-northeast-1: # 東京
+      AMI: ami-0123456789abcdef0  # 例: Amazon Linux 2 AMI
+    eu-west-1:      # アイルランド
+      AMI: ami-0987654321fedcba0  # 例: Amazon Linux 2 AMI
+  # 注意: 実際のAMI IDは定期更新されるため、最新IDを確認してください
+
+# ===================================================================
+# リソース: 実際に作成するAWSサービス群
+# ===================================================================
+Resources:
+
+  # -------------------------------------------------------------------
+  # 1. EC2インスタンス（メインのWebサーバー）
+  #
+  # 役割: FuelPHP + React アプリケーションを動作させるWebサーバー
+  # 例え: アプリケーションが動作する「サーバーマシン」
+  # 重要: UserDataで起動時に必要なソフトウェアを自動インストール
+  # -------------------------------------------------------------------
+  WebServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      # インスタンスタイプ: 無料枠対象の最小サイズ
+      # t3.micro = 1vCPU, 1GB RAM（十分な性能）
+      InstanceType: !Ref InstanceType
+
+      # AMI（Amazon Machine Image）: OSとソフトウェアのテンプレート
+      # Amazon Linux 2を使用（無料、セキュリティ更新あり、AWS最適化済み）
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+
+      # SSH接続用キーペア
+      # 事前にAWSコンソールで作成したキーペア名を指定
+      # これがないとEC2にSSH接続できない
+      KeyName: !Ref KeyPairName
+
+      # ネットワーク設定: 他のスタックから値をインポート
+      # VPCスタックで作成したパブリックサブネットに配置
+      SubnetId: !ImportValue
+        Fn::Sub: '${NetworkStackName}-PublicSubnetId'
+
+      # セキュリティグループ: ファイアウォール設定
+      # VPCスタックで作成したEC2用セキュリティグループを適用
+      SecurityGroupIds:
+        - !ImportValue
+          Fn::Sub: '${NetworkStackName}-EC2SecurityGroupId'
+
+      # EBS（ストレージ）設定
+      # 無料枠: 30GB までのgp2ストレージ
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda  # ルートデバイス
+          Ebs:
+            VolumeType: gp2      # 汎用SSD（無料枠対象）
+            VolumeSize: 30       # 30GB（無料枠上限）
+            DeleteOnTermination: true  # インスタンス削除時にストレージも削除
+
+      # UserData: インスタンス起動時に実行されるスクリプト
+      # 重要: ここでWebサーバー環境を自動構築
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # ===================================================================
+          # EC2起動時自動実行スクリプト
+          # 目的: LEMP環境（Linux + Nginx + MySQL + PHP）の構築
+          # ===================================================================
+
+          # ログ設定: スクリプトの実行ログを記録
+          exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+          echo "=== UserData script started at $(date) ==="
+
+          # システム更新（セキュリティパッチ適用）
+          echo "=== Updating system packages ==="
+          yum update -y
+
+          # 必要なリポジトリ追加
+          echo "=== Adding repositories ==="
+          # EPEL（Extra Packages for Enterprise Linux）: 追加パッケージ
+          amazon-linux-extras install epel -y
+          # PHP 8.0: 最新のPHP版
+          amazon-linux-extras install php8.0 -y
+
+          # Webサーバー関連ソフトウェアのインストール
+          echo "=== Installing web server packages ==="
+          yum install -y \
+            nginx \                    # Webサーバー
+            php \                      # PHP本体
+            php-fpm \                  # PHP FastCGI Process Manager
+            php-mysqlnd \              # MySQL用PHPドライバー
+            php-json \                 # JSON処理
+            php-xml \                  # XML処理
+            php-mbstring \             # マルチバイト文字列処理
+            php-gd \                   # 画像処理
+            php-curl \                 # HTTP通信
+            mysql \                    # MySQLクライアント
+            git \                      # バージョン管理
+            unzip                      # ファイル解凍
+
+          # Node.js インストール（React用）
+          echo "=== Installing Node.js ==="
+          # NVM（Node Version Manager）をインストール
+          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+          # NVMを現在のシェルで有効化
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          # Node.js LTS版をインストール
+          nvm install --lts
+          nvm use --lts
+          # npm（パッケージマネージャー）をグローバルにインストール
+          npm install -g npm@latest
+
+          # PHP設定の最適化
+          echo "=== Configuring PHP ==="
+          # PHPの設定ファイル編集
+          sed -i 's/;date.timezone =/date.timezone = Asia\/Tokyo/' /etc/php.ini
+          sed -i 's/upload_max_filesize = 2M/upload_max_filesize = 10M/' /etc/php.ini
+          sed -i 's/post_max_size = 8M/post_max_size = 10M/' /etc/php.ini
+          # PHP-FPMの設定（Nginxとの連携用）
+          sed -i 's/user = apache/user = nginx/' /etc/php-fpm.d/www.conf
+          sed -i 's/group = apache/group = nginx/' /etc/php-fpm.d/www.conf
+
+          # Nginx設定
+          echo "=== Configuring Nginx ==="
+          # バックアップ作成
+          cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
+
+          # Nginx設定ファイル作成
+          cat > /etc/nginx/conf.d/portfolio.conf << 'EOL'
+          server {
+              listen 80;
+              server_name _;  # すべてのドメインで受け付け
+              root /var/www/html;
+              index index.php index.html;
+
+              # PHP処理の設定
+              location ~ \.php$ {
+                  fastcgi_pass unix:/run/php-fpm/www.sock;
+                  fastcgi_index index.php;
+                  fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+                  include fastcgi_params;
+              }
+
+              # 静的ファイル処理（React用）
+              location / {
+                  try_files $uri $uri/ /index.php?$query_string;
+              }
+
+              # ログ設定
+              access_log /var/log/nginx/portfolio_access.log;
+              error_log /var/log/nginx/portfolio_error.log;
+          }
+          EOL
+
+          # Webルートディレクトリ作成と権限設定
+          echo "=== Setting up web directory ==="
+          mkdir -p /var/www/html
+          chown -R nginx:nginx /var/www/html
+          chmod -R 755 /var/www/html
+
+          # テスト用のPHPファイル作成
+          cat > /var/www/html/info.php << 'EOL'
+          <?php
+          // PHP動作確認用ファイル
+          phpinfo();
+          ?>
+          EOL
+
+          # 簡単なテスト用HTMLファイル
+          cat > /var/www/html/index.html << 'EOL'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Portfolio Server - Ready!</title>
+              <style>
+                  body { font-family: Arial, sans-serif; text-align: center; margin-top: 100px; }
+                  .container { max-width: 600px; margin: 0 auto; }
+                  .status { color: green; font-size: 24px; font-weight: bold; }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>🚀 Portfolio Server</h1>
+                  <p class="status">✅ Server is Running!</p>
+                  <p>FuelPHP + React development environment is ready.</p>
+                  <p><a href="/info.php">PHP Info</a></p>
+              </div>
+          </body>
+          </html>
+          EOL
+
+          # サービス起動設定
+          echo "=== Starting services ==="
+          # サービスの自動起動設定
+          systemctl enable nginx
+          systemctl enable php-fpm
+
+          # サービス開始
+          systemctl start php-fpm
+          systemctl start nginx
+
+          # ファイアウォール設定（Amazon Linux 2のiptables）
+          echo "=== Configuring firewall ==="
+          # HTTP（80番ポート）を許可
+          iptables -I INPUT -p tcp --dport 80 -j ACCEPT
+          # 設定を永続化
+          service iptables save
+
+          # 最終確認
+          echo "=== Final checks ==="
+          echo "Nginx status:"
+          systemctl status nginx --no-pager
+          echo "PHP-FPM status:"
+          systemctl status php-fpm --no-pager
+          echo "Disk usage:"
+          df -h
+
+          echo "=== UserData script completed successfully at $(date) ==="
+
+      # タグ設定: リソースの識別と管理用
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-web-server'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Purpose
+          Value: 'Web Server for Portfolio Application'
+
+  # -------------------------------------------------------------------
+  # 2. Elastic IP（固定IPアドレス）- オプション
+  #
+  # 役割: EC2インスタンスに固定のパブリックIPアドレスを割り当て
+  # メリット: インスタンス再起動してもIPアドレスが変わらない
+  # 注意: 無料枠では1個まで無料、使わない場合は課金対象
+  # -------------------------------------------------------------------
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      # EC2-VPCドメイン（VPC内のインスタンス用）
+      Domain: vpc
+      # 作成したEC2インスタンスに関連付け
+      InstanceId: !Ref WebServer
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-eip'
+
+# ===================================================================
+# アウトプット: 他のテンプレートや外部から参照する値
+# ===================================================================
+Outputs:
+  # EC2インスタンスID
+  InstanceId:
+    Description: 'EC2インスタンスID'
+    Value: !Ref WebServer
+    Export:
+      Name: !Sub '${AWS::StackName}-InstanceId'
+
+  # パブリックIPアドレス（Elastic IP）
+  PublicIP:
+    Description: 'パブリックIPアドレス（Webサイトアクセス用）'
+    Value: !Ref ElasticIP
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicIP'
+
+  # WebサイトURL
+  WebsiteURL:
+    Description: 'WebサイトURL（ブラウザでアクセス可能）'
+    Value: !Sub 'http://${ElasticIP}'
+    Export:
+      Name: !Sub '${AWS::StackName}-WebsiteURL'
+
+  # SSH接続コマンド例
+  SSHCommand:
+    Description: 'SSH接続コマンド例'
+    Value: !Sub 'ssh -i ${KeyPairName}.pem ec2-user@${ElasticIP}'
+
+# ===================================================================
+# 次のステップ: このテンプレートをデプロイした後
+#
+# 1. RDSデータベーステンプレート作成
+# 2. アプリケーションのデプロイ
+# 3. ドメイン設定とSSL証明書（オプション）
+#
+# デプロイコマンド例:
+# aws cloudformation create-stack \
+#   --stack-name your-project-ec2 \
+#   --template-body file://02-ec2-instance.yaml \
+#   --parameters ParameterKey=NetworkStackName,ParameterValue=your-project-network \
+#                ParameterKey=KeyPairName,ParameterValue=your-keypair
+# ===================================================================
