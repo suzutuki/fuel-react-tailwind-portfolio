@@ -1,0 +1,352 @@
+﻿# ===================================================================
+# CloudFormation テンプレート: VPCとネットワーク基盤（無料枠最適化版）
+#
+# 目的: ポートフォリオサイト用のネットワーク環境を構築
+# 構成: EC2（Webサーバー）+ RDS（データベース）- シングルAZ
+# 費用: 完全無料（AWS無料ティア範囲内）
+# ===================================================================
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'VPC and Network infrastructure for Portfolio (Free Tier - Single AZ)'
+
+# ===================================================================
+# パラメーター: デプロイ時に変更可能な値
+# CloudFormation実行時にユーザーが入力できる項目
+# ===================================================================
+Parameters:
+  ProjectName:
+    Type: String
+    Default: 'portfolio'
+    Description: 'プロジェクト名（全リソース名のプレフィックスとして使用）'
+    # 例: portfolio-prod-vpc のように名前に含まれる
+
+  Environment:
+    Type: String
+    Default: 'prod'
+    AllowedValues: ['dev', 'staging', 'prod']
+    Description: '環境名（開発・ステージング・本番環境を区別）'
+    # 同じテンプレートで複数環境を作成可能
+
+# ===================================================================
+# リソース: 実際に作成するAWSサービス群
+# ===================================================================
+Resources:
+
+  # -------------------------------------------------------------------
+  # 1. VPC（Virtual Private Cloud）= 仮想プライベートクラウド
+  #
+  # 役割: AWSクラウド内に独立したネットワーク空間を作成
+  # 例え: 自分専用のデータセンターを借りるイメージ
+  # なぜ必要: EC2やRDSを安全に配置するための土台
+  # -------------------------------------------------------------------
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      # CidrBlock: IPアドレスの範囲を指定
+      # 10.0.0.0/16 = 10.0.0.1〜10.0.255.254 まで約65,000個のIPアドレス
+      CidrBlock: 10.0.0.0/16
+
+      # DNS機能を有効化（重要！）
+      # これがないとRDSへの接続でドメイン名が使えない
+      EnableDnsHostnames: true  # example.rds.amazonaws.com のような名前解決
+      EnableDnsSupport: true    # DNS問い合わせ機能
+
+      # タグ: リソースに名前やメタデータを付与
+      # AWSコンソールで見やすくするため
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-vpc'  # portfolio-prod-vpc
+
+  # -------------------------------------------------------------------
+  # 2. インターネットゲートウェイ（IGW）
+  #
+  # 役割: VPCとインターネットを繋ぐ「玄関」
+  # 例え: オフィスビルの正面玄関
+  # なぜ必要: EC2がインターネットと通信するため
+  # -------------------------------------------------------------------
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-igw'  # portfolio-prod-igw
+
+  # -------------------------------------------------------------------
+  # 3. インターネットゲートウェイをVPCに接続
+  #
+  # 役割: 上で作ったIGWとVPCを物理的に接続
+  # 例え: 玄関とビル本体を繋げる工事
+  # なぜ必要: 接続しないとインターネットアクセス不可
+  # -------------------------------------------------------------------
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway  # 上で作ったIGWを参照
+      VpcId: !Ref VPC                          # 上で作ったVPCを参照
+
+  # -------------------------------------------------------------------
+  # 4. パブリックサブネット（EC2用）
+  #
+  # 役割: インターネットからアクセス可能なネットワーク領域
+  # 例え: オフィスビルの「接客フロア」
+  # 配置するもの: EC2インスタンス（Webサーバー）
+  # なぜパブリック: ユーザーがブラウザでアクセスするため
+  # -------------------------------------------------------------------
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC  # 親となるVPCを指定
+
+      # アベイラビリティゾーン: 物理的なデータセンターの場所
+      # !Select [ 0, !GetAZs '' ] = その地域の1番目のAZを自動選択
+      # 例: ap-northeast-1a (東京リージョンのAZ-A)
+      # 無料枠最適化: すべて同じAZに配置してコスト削減
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+
+      # IPアドレス範囲: VPCの中をさらに細分化
+      # 10.0.1.0/24 = 10.0.1.1〜10.0.1.254 まで254個のIP
+      CidrBlock: 10.0.1.0/24
+
+      # 自動パブリックIP割り当て: 重要な設定！
+      # これがtrueだとEC2に自動でパブリックIPが付与される
+      # falseだとインターネットからアクセスできない
+      MapPublicIpOnLaunch: true
+
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-public-subnet'
+
+  # -------------------------------------------------------------------
+  # 5. プライベートサブネット（RDS用）
+  #
+  # 役割: インターネットから直接アクセスできないネットワーク領域
+  # 例え: オフィスビルの「金庫室」
+  # 配置するもの: RDSデータベース
+  # なぜプライベート: データベースは外部から直接アクセスされると危険
+  # 無料枠最適化: 1つのAZのみ使用（シングルAZ配置）
+  # -------------------------------------------------------------------
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      # 重要: パブリックサブネットと同じAZに配置（コスト最適化）
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]  # 同じAZ
+      CidrBlock: 10.0.2.0/24  # パブリックサブネットとは違う範囲
+      # 注意: MapPublicIpOnLaunchを設定しない = デフォルトでfalse
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-private-subnet'
+
+  # -------------------------------------------------------------------
+  # 6. パブリックルートテーブル
+  #
+  # 役割: 「どのIPアドレスへのアクセスをどこに転送するか」の設定表
+  # 例え: 郵便配達員が使う「住所→配達先」対応表
+  # なぜ必要: サブネットだけでは通信経路が分からない
+  # -------------------------------------------------------------------
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC  # どのVPCのルートテーブルか
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-public-routes'
+
+  # -------------------------------------------------------------------
+  # 7. デフォルトルート（重要！）
+  #
+  # 役割: 「VPC以外のすべてのアドレスはIGWに送る」という設定
+  # 例え: 「ビル以外の住所への郵便物は正面玄関に持参」
+  # なぜ必要: これがないとインターネットにアクセスできない
+  # -------------------------------------------------------------------
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    # DependsOn: IGWの接続が完了してから実行（順序制御）
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable      # どのルートテーブルに設定するか
+      DestinationCidrBlock: 0.0.0.0/0          # すべてのIPアドレス（インターネット全体）
+      GatewayId: !Ref InternetGateway           # 転送先はIGW
+
+  # -------------------------------------------------------------------
+  # 8. サブネットとルートテーブルの関連付け
+  #
+  # 役割: パブリックサブネットに上記のルートテーブルを適用
+  # 例え: 接客フロアに「住所対応表」を設置
+  # なぜ必要: 関連付けないとルーティング設定が有効にならない
+  # -------------------------------------------------------------------
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable  # 使用するルートテーブル
+      SubnetId: !Ref PublicSubnet          # 適用するサブネット
+
+  # -------------------------------------------------------------------
+  # 9. EC2用セキュリティグループ（ファイアウォール）
+  #
+  # 役割: EC2インスタンスへの通信を制御する仮想ファイアウォール
+  # 例え: オフィスビルの警備員（誰を通すか決める）
+  # 設定内容: どのポート（サービス）への接続を許可するか
+  # -------------------------------------------------------------------
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ProjectName}-${Environment}-ec2-sg'
+      GroupDescription: 'Security group for EC2 web server'
+      VpcId: !Ref VPC  # どのVPCのセキュリティグループか
+
+      # インバウンドルール: 外部からEC2への通信許可設定
+      SecurityGroupIngress:
+        # HTTP通信許可（ポート80）
+        # ブラウザからWebサイトへのアクセス用
+        - IpProtocol: tcp              # プロトコル: TCP
+          FromPort: 80                 # 開始ポート: 80
+          ToPort: 80                   # 終了ポート: 80（単一ポート）
+          CidrIp: 0.0.0.0/0           # アクセス元: すべてのIPアドレス
+          Description: 'HTTP access from anywhere'
+
+        # HTTPS通信許可（ポート443）
+        # SSL/TLS暗号化されたWebアクセス用（将来的に証明書設定時）
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'HTTPS access from anywhere'
+
+        # SSH通信許可（ポート22）
+        # サーバー管理・メンテナンス用のリモートアクセス
+        # 注意: 本番環境では特定のIPアドレスのみに制限推奨
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0           # 現在は全開放（学習用）
+          Description: 'SSH access from anywhere (WARNING: Consider restricting in production)'
+
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-ec2-sg'
+
+  # -------------------------------------------------------------------
+  # 10. RDS用セキュリティグループ（データベース保護）
+  #
+  # 役割: データベースへのアクセスを厳格に制御
+  # 例え: 金庫室の特別な警備員（許可された人のみ通す）
+  # セキュリティポイント: EC2からのみアクセス可能、インターネットからは不可
+  # -------------------------------------------------------------------
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ProjectName}-${Environment}-rds-sg'
+      GroupDescription: 'Security group for RDS database'
+      VpcId: !Ref VPC
+
+      SecurityGroupIngress:
+        # MySQL通信許可（ポート3306）
+        # 重要: SourceSecurityGroupIdを使用してEC2からのみアクセス許可
+        - IpProtocol: tcp
+          FromPort: 3306                                    # MySQLの標準ポート
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref EC2SecurityGroup      # アクセス元: EC2セキュリティグループのみ
+          Description: 'MySQL access from EC2 instances only'
+          # これにより、EC2インスタンスからのみデータベースにアクセス可能
+          # インターネットや他のサービスからは完全に遮断
+
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-rds-sg'
+
+  # -------------------------------------------------------------------
+  # 11. DBサブネットグループ（無料枠最適化版）
+  #
+  # 役割: RDSインスタンスをどのサブネットに配置するかを定義
+  # 例え: 金庫をビルのどの階層に設置するかの指定書
+  # 無料枠最適化: シングルAZ構成、プライベートサブネット1つのみ
+  # 注意: RDSの要件により最低2つのサブネットが必要なため、
+  #       プライベートサブネットを追加作成
+  # -------------------------------------------------------------------
+
+  # RDS要件のための2番目のプライベートサブネット（最小限）
+  # 注意: RDSはDBサブネットグループに最低2つのサブネットが必要
+  PrivateSubnetForRDS:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      # 異なるAZに配置（RDSの要件）
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]  # 2番目のAZ
+      CidrBlock: 10.0.3.0/24  # 別の範囲
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-private-subnet-rds-requirement'
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub '${ProjectName}-${Environment}-db-subnet-group'
+      DBSubnetGroupDescription: 'Subnet group for RDS database (Free Tier)'
+
+      # サブネットID一覧: RDSが使用可能なサブネット
+      # RDSの要件により2つのサブネットが必要（異なるAZ）
+      SubnetIds:
+        - !Ref PrivateSubnet        # メインのプライベートサブネット
+        - !Ref PrivateSubnetForRDS  # RDS要件用の2番目のサブネット
+
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-db-subnet-group'
+
+# ===================================================================
+# アウトプット: 他のCloudFormationテンプレートで使用する値
+#
+# 役割: このテンプレートで作成したリソースの情報を他のテンプレートに渡す
+# 例え: 設計図の「この部品は他の工程で使ってください」という指示
+# 使用場面: EC2テンプレートでVPC IDやセキュリティグループIDが必要
+# ===================================================================
+Outputs:
+  # VPC ID: 作成したVPCの一意識別子
+  VPCId:
+    Description: 'VPC ID (他のリソース作成時に必要)'
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'  # エクスポート名: portfolio-network-VPCId
+
+  # パブリックサブネット ID: EC2インスタンス配置用
+  PublicSubnetId:
+    Description: 'Public Subnet ID (EC2インスタンス配置用)'
+    Value: !Ref PublicSubnet
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnetId'
+
+  # EC2セキュリティグループ ID: EC2インスタンス作成時に適用
+  EC2SecurityGroupId:
+    Description: 'EC2 Security Group ID (EC2インスタンス用ファイアウォール設定)'
+    Value: !Ref EC2SecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2SecurityGroupId'
+
+  # RDSセキュリティグループ ID: データベース作成時に適用
+  RDSSecurityGroupId:
+    Description: 'RDS Security Group ID (データベース用ファイアウォール設定)'
+    Value: !Ref RDSSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSSecurityGroupId'
+
+  # DBサブネットグループ名: RDSインスタンス作成時に指定
+  DBSubnetGroupName:
+    Description: 'DB Subnet Group Name (RDSインスタンス配置用)'
+    Value: !Ref DBSubnetGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-DBSubnetGroupName'
+
+# ===================================================================
+# 次のステップ: このテンプレートをデプロイした後
+#
+# 1. EC2インスタンステンプレート作成
+# 2. RDSインスタンステンプレート作成
+# 3. アプリケーションデプロイ
+#
+# デプロイコマンド例:
+# aws cloudformation create-stack \
+#   --stack-name portfolio-network \
+#   --template-body file://01-vpc-network.yaml \
+#   --parameters ParameterKey=ProjectName,ParameterValue=myportfolio
+# ===================================================================

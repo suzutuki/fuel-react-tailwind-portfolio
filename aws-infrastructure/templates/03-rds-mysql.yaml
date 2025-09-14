@@ -1,0 +1,135 @@
+# ===================================================================
+# CloudFormation テンプレート: RDS MySQL（無料枠）
+# 目的: ポートフォリオサイト用のMySQLデータベースを構築
+# 費用: AWS無料利用枠内（db.t3.micro, 20GB, Single-AZ）
+# ===================================================================
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'RDS MySQL Database for Portfolio (Free Tier)'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: 'portfolio'
+    Description: 'プロジェクト名（リソース名のプレフィックス）'
+
+  Environment:
+    Type: String
+    Default: 'prod'
+    AllowedValues: ['dev', 'staging', 'prod']
+    Description: '環境名（開発・ステージング・本番）'
+
+  NetworkStackName:
+    Type: String
+    Default: 'portfolio-prod-network'
+    Description: 'VPCスタック名（ネットワークリソースをインポート）'
+
+  DBUsername:
+    Type: String
+    Default: 'admin'
+    Description: 'データベースの管理者ユーザー名'
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: '1-16文字、英字で始まり英数字のみ使用可能'
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: 'データベースのパスワード（8文字以上）'
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: '[a-zA-Z0-9]*'
+    ConstraintDescription: '8-41文字、英数字のみ使用可能'
+
+  DBName:
+    Type: String
+    Default: 'portfolio'
+    Description: '作成するデータベース名'
+    MinLength: 1
+    MaxLength: 64
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: '1-64文字、英字で始まり英数字のみ使用可能'
+
+Resources:
+  # -------------------------------------------------------------------
+  # RDS MySQLインスタンス（無料枠最適化）
+  # -------------------------------------------------------------------
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      # データベースエンジンとバージョン
+      Engine: mysql
+      EngineVersion: '8.0.35'  # MySQL 8.0系の安定版
+      
+      # インスタンス設定（無料枠）
+      DBInstanceClass: db.t3.micro     # 無料枠対象インスタンスタイプ
+      AllocatedStorage: 20             # 20GB（無料枠上限）
+      StorageType: gp2                 # General Purpose SSD
+      StorageEncrypted: false          # 無料枠では暗号化は有料
+      
+      # 可用性設定（コスト最適化）
+      MultiAZ: false                   # Single-AZ配置（無料枠）
+      PubliclyAccessible: false        # セキュリティ: パブリックアクセス禁止
+      
+      # データベース設定
+      DBName: !Ref DBName
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      
+      # ネットワーク設定（既存VPCを使用）
+      DBSubnetGroupName: !ImportValue
+        Fn::Sub: '${NetworkStackName}-DBSubnetGroupName'
+      VPCSecurityGroups:
+        - !ImportValue
+          Fn::Sub: '${NetworkStackName}-RDSSecurityGroupId'
+      
+      # バックアップ設定（無料枠対応）
+      BackupRetentionPeriod: 7         # 7日間のバックアップ保持（無料）
+      PreferredBackupWindow: '03:00-04:00'   # 深夜時間帯にバックアップ
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'  # 日曜深夜にメンテナンス
+      
+      # パフォーマンス設定
+      MonitoringInterval: 0            # 拡張モニタリング無効（有料機能のため）
+      PerformanceInsightsRetentionPeriod: 0  # Performance Insights無効
+      
+      # 削除設定
+      DeletionProtection: false        # 開発環境のため削除保護無効
+      DeleteAutomatedBackups: true     # インスタンス削除時にバックアップも削除
+      
+      # タグ設定
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-mysql'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+Outputs:
+  # データベース接続情報
+  DatabaseEndpoint:
+    Description: 'RDSインスタンスのエンドポイント'
+    Value: !GetAtt DatabaseInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-DatabaseEndpoint'
+
+  DatabasePort:
+    Description: 'データベースのポート番号'
+    Value: !GetAtt DatabaseInstance.Endpoint.Port
+    Export:
+      Name: !Sub '${AWS::StackName}-DatabasePort'
+
+  DatabaseName:
+    Description: 'データベース名'
+    Value: !Ref DBName
+    Export:
+      Name: !Sub '${AWS::StackName}-DatabaseName'
+
+  ConnectionString:
+    Description: 'データベース接続文字列（パスワードは別途設定）'
+    Value: !Sub 'mysql://${DBUsername}:[PASSWORD]@${DatabaseInstance.Endpoint.Address}:${DatabaseInstance.Endpoint.Port}/${DBName}'
+
+  JDBCConnectionString:
+    Description: 'JDBC接続文字列'
+    Value: !Sub 'jdbc:mysql://${DatabaseInstance.Endpoint.Address}:${DatabaseInstance.Endpoint.Port}/${DBName}'

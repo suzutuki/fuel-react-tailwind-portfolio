@@ -10,7 +10,7 @@ set -e  # エラーが発生したら即座に停止
 # 設定値
 PROJECT_NAME="portfolio"
 ENVIRONMENT="prod"
-REGION="us-east-1"  # 使用するリージョン（変更可能）
+REGION="ap-northeast-1"  # 使用するリージョン（東京）
 
 # 引数チェック
 if [ $# -eq 0 ]; then
@@ -77,7 +77,7 @@ if aws cloudformation describe-stacks --stack-name $EC2_STACK_NAME --region $REG
     # スタック更新
     aws cloudformation update-stack \
         --stack-name $EC2_STACK_NAME \
-        --template-body file://templates/02-ec2-instance.yaml \
+        --template-body file://templates/02-ec2-instance-static-ami.yaml \
         --parameters ParameterKey=ProjectName,ParameterValue=$PROJECT_NAME \
                      ParameterKey=Environment,ParameterValue=$ENVIRONMENT \
                      ParameterKey=NetworkStackName,ParameterValue=$NETWORK_STACK_NAME \
@@ -87,7 +87,7 @@ else
     # EC2スタック作成
     aws cloudformation create-stack \
         --stack-name $EC2_STACK_NAME \
-        --template-body file://templates/02-ec2-instance.yaml \
+        --template-body file://templates/02-ec2-instance-static-ami.yaml \
         --parameters ParameterKey=ProjectName,ParameterValue=$PROJECT_NAME \
                      ParameterKey=Environment,ParameterValue=$ENVIRONMENT \
                      ParameterKey=NetworkStackName,ParameterValue=$NETWORK_STACK_NAME \

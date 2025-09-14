@@ -16,7 +16,7 @@ export COST_CENTER="development"         # コスト管理用（オプション�
 # 環境設定（dev/staging/prod）
 # ===================================================================
 export ENVIRONMENT="prod"                # 環境名
-export REGION="us-east-1"                # AWS リージョン
+export REGION="ap-northeast-1"           # AWS リージョン（東京）
 
 # ===================================================================
 # インスタンス設定（環境別にカスタマイズ可能）
@@ -46,9 +46,10 @@ export PRIVATE_SUBNET_CIDR="10.0.2.0/24" # プライベートサブネット
 
 # SSH接続許可IP（セキュリティ強化）
 # 本番環境では特定IPのみに制限することを強く推奨
+# TODO(human) - 実際に使用するIPアドレスに更新してください
 case $ENVIRONMENT in
   "prod")
-    export SSH_ALLOWED_CIDR="YOUR_IP_ADDRESS/32"  # 本番：特定IPのみ
+    export SSH_ALLOWED_CIDR="211.7.122.136/32"  # 本番：特定IPのみ
     ;;
   *)
     export SSH_ALLOWED_CIDR="0.0.0.0/0"           # 開発：全IP（注意）

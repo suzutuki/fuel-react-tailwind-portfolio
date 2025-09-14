@@ -1,0 +1,202 @@
+# ===================================================================
+# CloudFormation テンプレート: EC2インスタンス（Webサーバー）- 固定AMI版
+# ===================================================================
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'EC2 Web Server for Portfolio (Free Tier) - Static AMI Version'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: 'portfolio'
+    Description: 'プロジェクト名（リソース名のプレフィックス）'
+
+  Environment:
+    Type: String
+    Default: 'prod'
+    AllowedValues: ['dev', 'staging', 'prod']
+    Description: '環境名（開発・ステージング・本番）'
+
+  NetworkStackName:
+    Type: String
+    Default: 'portfolio-network'
+    Description: 'VPCスタック名（01-vpc-network.yamlで作成したスタック名）'
+
+  KeyPairName:
+    Type: String
+    Description: 'SSH接続用のEC2キーペア名（事前にAWSコンソールで作成が必要）'
+
+  InstanceType:
+    Type: String
+    Default: 't3.micro'
+    AllowedValues: ['t2.micro', 't3.micro', 't3.small']
+    Description: 'EC2インスタンスタイプ（無料枠: t2.micro または t3.micro）'
+
+# 更新されたAMI ID（2025年9月時点の最新）
+# 修正版: Mappingsセクションの正しい書き方
+
+Mappings:
+  RegionMap:
+    ap-northeast-1:
+      AMI: ami-04a0bed0506216d2d  # Amazon Linux 2 AMI (HVM) - 2025年9月時点の安定版
+Resources:
+  WebServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      KeyName: !Ref KeyPairName
+      SubnetId: !ImportValue
+        Fn::Sub: '${NetworkStackName}-PublicSubnetId'
+      SecurityGroupIds:
+        - !ImportValue
+          Fn::Sub: '${NetworkStackName}-EC2SecurityGroupId'
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp2
+            VolumeSize: 30
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+          echo "=== UserData script started at $(date) ==="
+
+          yum update -y
+          amazon-linux-extras install epel -y
+          amazon-linux-extras install php8.0 -y
+
+          yum install -y \
+            nginx \
+            php \
+            php-fpm \
+            php-mysqlnd \
+            php-json \
+            php-xml \
+            php-mbstring \
+            php-gd \
+            php-curl \
+            mysql \
+            git \
+            unzip
+
+          # Node.js インストール
+          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          nvm install --lts
+          nvm use --lts
+          npm install -g npm@latest
+
+          # PHP設定
+          sed -i 's/;date.timezone =/date.timezone = Asia\/Tokyo/' /etc/php.ini
+          sed -i 's/upload_max_filesize = 2M/upload_max_filesize = 10M/' /etc/php.ini
+          sed -i 's/post_max_size = 8M/post_max_size = 10M/' /etc/php.ini
+          sed -i 's/user = apache/user = nginx/' /etc/php-fpm.d/www.conf
+          sed -i 's/group = apache/group = nginx/' /etc/php-fpm.d/www.conf
+
+          # Nginx設定
+          cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
+          cat > /etc/nginx/conf.d/portfolio.conf << 'EOL'
+          server {
+              listen 80;
+              server_name _;
+              root /var/www/html;
+              index index.php index.html;
+
+              location ~ \.php$ {
+                  fastcgi_pass unix:/run/php-fpm/www.sock;
+                  fastcgi_index index.php;
+                  fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+                  include fastcgi_params;
+              }
+
+              location / {
+                  try_files $uri $uri/ /index.php?$query_string;
+              }
+
+              access_log /var/log/nginx/portfolio_access.log;
+              error_log /var/log/nginx/portfolio_error.log;
+          }
+          EOL
+
+          mkdir -p /var/www/html
+          chown -R nginx:nginx /var/www/html
+          chmod -R 755 /var/www/html
+
+          cat > /var/www/html/info.php << 'EOL'
+          <?php phpinfo(); ?>
+          EOL
+
+          cat > /var/www/html/index.html << 'EOL'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Portfolio Server - Ready!</title>
+              <style>
+                  body { font-family: Arial, sans-serif; text-align: center; margin-top: 100px; }
+                  .container { max-width: 600px; margin: 0 auto; }
+                  .status { color: green; font-size: 24px; font-weight: bold; }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>🚀 Portfolio Server</h1>
+                  <p class="status">✅ Server is Running!</p>
+                  <p>FuelPHP + React development environment is ready.</p>
+                  <p><a href="/info.php">PHP Info</a></p>
+              </div>
+          </body>
+          </html>
+          EOL
+
+          systemctl enable nginx
+          systemctl enable php-fpm
+          systemctl start php-fpm
+          systemctl start nginx
+
+          iptables -I INPUT -p tcp --dport 80 -j ACCEPT
+          service iptables save
+
+          echo "=== UserData script completed successfully at $(date) ==="
+
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-web-server'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref WebServer
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-eip'
+
+Outputs:
+  InstanceId:
+    Description: 'EC2インスタンスID'
+    Value: !Ref WebServer
+    Export:
+      Name: !Sub '${AWS::StackName}-InstanceId'
+
+  PublicIP:
+    Description: 'パブリックIPアドレス'
+    Value: !Ref ElasticIP
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicIP'
+
+  WebsiteURL:
+    Description: 'WebサイトURL'
+    Value: !Sub 'http://${ElasticIP}'
+    Export:
+      Name: !Sub '${AWS::StackName}-WebsiteURL'
+
+  SSHCommand:
+    Description: 'SSH接続コマンド例'
+    Value: !Sub 'ssh -i ${KeyPairName}.pem ec2-user@${ElasticIP}'
