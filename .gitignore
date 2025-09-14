@@ -94,6 +94,15 @@ aws-infrastructure/logs/
 *.pem
 *.key
 
+# AWS CloudFormation - Environment specific parameters
+aws-infrastructure/parameters/
+*-parameters.json
+deploy-parameters.json
+
 # AWS Infrastructure - Environment specific configs
 aws-infrastructure/config/*-config.sh
 !aws-infrastructure/config/deploy-config.sh
+
+# AWS Deployment outputs (may contain sensitive endpoints)
+aws-infrastructure/outputs/
+stack-outputs.json
