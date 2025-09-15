@@ -36,7 +36,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = memo(({
                 <InputField
                     label="商品名"
                     required
-                    placeholder="例：ｱｸﾘﾙ防水ﾃｰﾌﾟ[片面][75mm][20m巻]"
+                    placeholder="例：ｱｸﾘﾙ防水ﾃｰﾌﾟ 50mm×20m"
                     value={detail.productName}
                     onChange={createInputHandler("productName")}
                 />

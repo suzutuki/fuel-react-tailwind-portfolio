@@ -19,8 +19,6 @@ const createDefaultOrderDetail = (id: number): OrderDetail => ({
     unitWeight: "",
     unit: "",
     carrierCode: DEFAULT_VALUES.CARRIER_CODE,
-    shipper: "",
-    shipperPhone: "",
     orderUnitPrice: "",
     totalPrice: "",
     deliveryUnitPrice: "",

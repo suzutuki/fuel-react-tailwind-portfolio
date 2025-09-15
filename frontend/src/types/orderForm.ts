@@ -12,8 +12,6 @@ export interface OrderDetail {
     unitWeight: string;
     unit: string;
     carrierCode: string;
-    shipper: string;
-    shipperPhone: string;
     orderUnitPrice: string;
     totalPrice: string;
     deliveryUnitPrice: string;

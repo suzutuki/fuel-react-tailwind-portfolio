@@ -81,14 +81,10 @@ const Home: React.FC = () => {
             {/* Main Content */}
             <main className="container mx-auto px-6 py-12">
                 <div className="text-center">
-                    <h2 className="text-4xl font-bold text-gray-900 mb-4">
-                        ようこそ！
-                    </h2>
                     <p className="text-xl text-gray-600 mb-8">
                         FuelPHP、React、TypeScript、TailwindCSS
                         shadcn/uiで構築されたアプリケーションです
                     </p>
-
                     {/* Feature Cards */}
                     <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mt-12">
                         <div className="bg-white rounded-lg shadow-md p-6">

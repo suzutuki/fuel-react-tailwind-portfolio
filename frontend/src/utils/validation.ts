@@ -41,10 +41,6 @@ export const validateOrderDetail = (detail: OrderDetail): ValidationResult => {
         }
     }
 
-    // Phone number validation
-    if (detail.shipperPhone && !/^[\d-+()]+$/.test(detail.shipperPhone)) {
-        errors.shipperPhone = "電話番号の形式が正しくありません";
-    }
 
     // Numeric validations
     const numericFields = ['orderUnitPrice', 'deliveryUnitPrice', 'customerUnitPrice', 'unitWeight'];

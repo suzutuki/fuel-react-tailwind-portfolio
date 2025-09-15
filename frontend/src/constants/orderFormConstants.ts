@@ -51,7 +51,7 @@ export const PRODUCT_SEARCH_OPTIONS = [
 ];
 
 export const DEFAULT_VALUES = {
-    DELIVERY_PHONE: "0748-72-2972",
+    DELIVERY_PHONE: "0120-123-456",
     DELIVERY_MEMO: "不在時連絡下さい。不在置き厳禁",
     MAX_VEHICLE: "-",
     DELIVERY_DESTINATION_TYPE: "1",

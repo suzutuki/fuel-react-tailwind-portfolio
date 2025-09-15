@@ -45,26 +45,12 @@ export const DeliveryInfoSection: React.FC<DeliveryInfoSectionProps> = memo(({
                 />
             </GridSection>
 
-            <GridSection columns={3}>
+            <GridSection columns={1}>
                 <SelectField
                     label="運送業者"
                     options={CARRIER_OPTIONS}
                     value={detail.carrierCode}
                     onValueChange={createFieldHandler("carrierCode")}
-                />
-
-                <InputField
-                    label="荷受人"
-                    placeholder="例：山田 太郎"
-                    value={detail.shipper}
-                    onChange={createInputHandler("shipper")}
-                />
-
-                <InputField
-                    label="荷受人電話番号"
-                    placeholder="例：090-1234-5678"
-                    value={detail.shipperPhone}
-                    onChange={createInputHandler("shipperPhone")}
                 />
             </GridSection>
         </>

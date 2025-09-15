@@ -82,8 +82,6 @@ class Controller_Api_Orders extends Controller_Rest
                     'unit_weight' => $detail['unitWeight'],
                     'unit' => $detail['unit'],
                     'carrier_code' => $detail['carrierCode'],
-                    'shipper' => $detail['shipper'],
-                    'shipper_phone' => $detail['shipperPhone'],
                     'order_unit_price' => $detail['orderUnitPrice'],
                     'total_price' => $detail['totalPrice'],
                     'delivery_unit_price' => $detail['deliveryUnitPrice'],
