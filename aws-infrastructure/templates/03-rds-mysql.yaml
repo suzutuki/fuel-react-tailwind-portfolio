@@ -60,7 +60,8 @@ Resources:
     Properties:
       # データベースエンジンとバージョン
       Engine: mysql
-      EngineVersion: '8.0.35'  # MySQL 8.0系の安定版
+      # EngineVersion: '8.0.39'  # 特定バージョンを指定する場合
+      # バージョン指定を省略してAWSデフォルトを使用
       
       # インスタンス設定（無料枠）
       DBInstanceClass: db.t3.micro     # 無料枠対象インスタンスタイプ
@@ -91,7 +92,7 @@ Resources:
       
       # パフォーマンス設定
       MonitoringInterval: 0            # 拡張モニタリング無効（有料機能のため）
-      PerformanceInsightsRetentionPeriod: 0  # Performance Insights無効
+      # PerformanceInsightsRetentionPeriod: 0  # この行を削除してデフォルトを使用
       
       # 削除設定
       DeletionProtection: false        # 開発環境のため削除保護無効

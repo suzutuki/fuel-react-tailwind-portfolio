@@ -124,9 +124,14 @@ class Controller_Api_Orders extends Controller_Rest
                 ->execute()
                 ->as_array();
 
+            // TODO(human): フロントエンドとの連携を完成させるため、
+            // 各受注に対応する明細データも取得してフォーマットを整える処理をここに実装してください
+            // ヒント: 受注データに orderDetails プロパティを追加し、
+            // formData プロパティとして必要なフィールドを再構築する必要があります
+
             return $this->response(array(
                 'success' => true,
-                'data' => $orders
+                'orders' => $orders  // 'data' から 'orders' に変更
             ), 200);
 
         } catch (Exception $e) {

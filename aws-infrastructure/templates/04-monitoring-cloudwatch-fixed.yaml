@@ -1,0 +1,226 @@
+echo "🔧 IAM権限の修正とスタック再デプロイ手順"
+echo "============================================="
+
+# 1. 現在のIAMユーザーの権限確認
+echo "📋 現在のIAMユーザー権限を確認:"
+aws iam list-attached-user-policies --user-name portfolio-deploy-IAM
+echo ""
+aws iam list-user-policies --user-name portfolio-deploy-IAM
+
+echo ""
+echo "============================================="
+
+# 2. 必要な権限を追加するIAMポリシー作成
+echo "🔑 必要な権限を付与するための追加ポリシーを作成:"
+
+cat << 'EOF' > monitoring-iam-policy.json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "sns:*",
+                "ssm:PutParameter",
+                "ssm:GetParameter",
+                "ssm:DeleteParameter",
+                "ssm:GetParameters",
+                "ssm:DescribeParameters",
+                "cloudwatch:*",
+                "logs:*"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+EOF
+
+echo "✅ monitoring-iam-policy.json を作成しました"
+echo ""
+
+# 3. IAMポリシーをアタッチ
+echo "🔗 IAMユーザーに追加権限をアタッチ:"
+echo ""
+echo "以下のコマンドを実行してください:"
+echo ""
+echo "# 新しいポリシーを作成"
+echo "aws iam create-policy \\"
+echo "  --policy-name PortfolioMonitoringPolicy \\"
+echo "  --policy-document file://monitoring-iam-policy.json"
+echo ""
+echo "# ポリシーをユーザーにアタッチ"
+echo "aws iam attach-user-policy \\"
+echo "  --user-name portfolio-deploy-IAM \\"
+echo "  --policy-arn arn:aws:iam::276983626342:policy/PortfolioMonitoringPolicy"
+
+echo ""
+echo "============================================="
+
+# 4. 失敗したスタックのクリーンアップ
+echo "🧹 失敗したスタックをクリーンアップ:"
+echo ""
+echo "aws cloudformation delete-stack \\"
+echo "  --region ap-northeast-1 \\"
+echo "  --stack-name \"\${PROJECT_NAME}-\${ENVIRONMENT}-monitoring\""
+echo ""
+echo "# 削除完了を待機"
+echo "aws cloudformation wait stack-delete-complete \\"
+echo "  --region ap-northeast-1 \\"
+echo "  --stack-name \"\${PROJECT_NAME}-\${ENVIRONMENT}-monitoring\""
+
+echo ""
+echo "============================================="
+
+# 5. 修正されたテンプレート作成（簡略版）
+echo "📝 修正されたCloudFormationテンプレートを作成:"
+
+cat << 'EOF' > 04-monitoring-cloudwatch-fixed.yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudWatch Monitoring - Fixed IAM Issues'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: 'portfolio'
+    Description: 'プロジェクト名'
+
+  Environment:
+    Type: String
+    Default: 'prod'
+    AllowedValues: ['dev', 'staging', 'prod']
+    Description: '環境名'
+
+  AlertEmail:
+    Type: String
+    Description: 'アラート通知を受信するメールアドレス'
+    AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
+
+Resources:
+  # SNS Topic（KMS暗号化なし - 簡略化）
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${ProjectName}-${Environment}-alerts'
+      DisplayName: !Sub '${ProjectName} ${Environment} Infrastructure Alerts'
+
+  # メール通知の購読設定
+  EmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AlertTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
+  # CloudWatch Agent設定（簡略化）
+  CloudWatchAgentConfig:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/cloudwatch-agent/${ProjectName}-${Environment}/config'
+      Type: String
+      Value: !Sub |
+        {
+          "agent": {
+            "metrics_collection_interval": 60,
+            "run_as_user": "cwagent"
+          },
+          "metrics": {
+            "namespace": "CWAgent",
+            "metrics_collected": {
+              "cpu": {
+                "measurement": ["cpu_usage_user", "cpu_usage_system"],
+                "metrics_collection_interval": 60
+              },
+              "disk": {
+                "measurement": ["used_percent"],
+                "metrics_collection_interval": 60,
+                "resources": ["*"]
+              },
+              "mem": {
+                "measurement": ["mem_used_percent"],
+                "metrics_collection_interval": 60
+              }
+            }
+          }
+        }
+      Description: 'CloudWatch Agent設定'
+
+  # 基本的なダッシュボード（依存関係なし）
+  BasicDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${ProjectName}-${Environment}-basic-monitoring'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "text",
+              "x": 0,
+              "y": 0,
+              "width": 24,
+              "height": 3,
+              "properties": {
+                "markdown": "# ${ProjectName} ${Environment} 監視ダッシュボード\n\n監視システムが正常に起動しました。EC2とRDSの詳細メトリクスは後で追加できます。"
+              }
+            }
+          ]
+        }
+
+Outputs:
+  AlertTopicArn:
+    Description: 'アラート通知用SNSトピックARN'
+    Value: !Ref AlertTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-AlertTopicArn'
+
+  DashboardURL:
+    Description: 'CloudWatch監視ダッシュボードURL'
+    Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ProjectName}-${Environment}-basic-monitoring'
+
+  CloudWatchAgentConfigParameter:
+    Description: 'CloudWatch Agent設定パラメータ名'
+    Value: !Ref CloudWatchAgentConfig
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudWatchAgentConfig'
+EOF
+
+echo "✅ 04-monitoring-cloudwatch-fixed.yaml を作成しました"
+
+echo ""
+echo "============================================="
+
+# 6. 再デプロイ手順
+echo "🚀 再デプロイ手順:"
+echo ""
+echo "1. IAM権限を修正後、以下のコマンドで再デプロイ:"
+echo ""
+echo "aws cloudformation create-stack \\"
+echo "  --stack-name \"\${PROJECT_NAME}-\${ENVIRONMENT}-monitoring\" \\"
+echo "  --template-body file://04-monitoring-cloudwatch-fixed.yaml \\"
+echo "  --parameters \\"
+echo "    ParameterKey=ProjectName,ParameterValue=\"\$PROJECT_NAME\" \\"
+echo "    ParameterKey=Environment,ParameterValue=\"\$ENVIRONMENT\" \\"
+echo "    ParameterKey=AlertEmail,ParameterValue=\"\$ALERT_EMAIL\" \\"
+echo "  --region ap-northeast-1"
+
+echo ""
+echo "============================================="
+
+# 7. 代替案：既存のAWSマネージドポリシー使用
+echo "🔄 代替案 - 既存のAWSマネージドポリシーを使用:"
+echo ""
+echo "# より包括的な権限（開発環境用）"
+echo "aws iam attach-user-policy \\"
+echo "  --user-name portfolio-deploy-IAM \\"
+echo "  --policy-arn arn:aws:iam::aws:policy/CloudWatchFullAccess"
+echo ""
+echo "aws iam attach-user-policy \\"
+echo "  --user-name portfolio-deploy-IAM \\"
+echo "  --policy-arn arn:aws:iam::aws:policy/AmazonSSMFullAccess"
+echo ""
+echo "aws iam attach-user-policy \\"
+echo "  --user-name portfolio-deploy-IAM \\"
+echo "  --policy-arn arn:aws:iam::aws:policy/AmazonSNSFullAccess"
+
+echo ""
+echo "============================================="
+echo "✅ 修正完了後、上記の手順に従って再デプロイしてください"

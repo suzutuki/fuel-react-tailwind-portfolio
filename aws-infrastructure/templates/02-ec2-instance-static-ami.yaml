@@ -157,7 +157,38 @@ Resources:
           systemctl start nginx
 
           iptables -I INPUT -p tcp --dport 80 -j ACCEPT
+          iptables -I INPUT -p tcp --dport 443 -j ACCEPT
           service iptables save
+
+          # Let's Encrypt SSL証明書設定
+          echo "=== Starting SSL setup ==="
+
+          # certbotのインストール
+          amazon-linux-extras install epel -y
+          yum install -y certbot python3-certbot-nginx
+
+          # 一時的にポート80でのアクセスを確認
+          sleep 30
+
+          # 証明書取得（ドメインが有効な場合のみ）
+          if curl -f http://suzutuki-portfolio.com/ > /dev/null 2>&1; then
+              echo "Domain is accessible, obtaining SSL certificate..."
+              certbot --nginx \
+                  --non-interactive \
+                  --agree-tos \
+                  --email renath31@gmail.com \
+                  --domains suzutuki-portfolio.com,www.suzutuki-portfolio.com \
+                  --redirect || echo "SSL certificate setup failed, continuing without SSL"
+
+              # 自動更新設定
+              echo "0 12 * * * /usr/bin/certbot renew --quiet && systemctl reload nginx" | crontab -
+
+              systemctl restart nginx
+              echo "SSL certificate configured successfully"
+          else
+              echo "Domain not yet accessible, skipping SSL setup"
+              echo "Please run SSL setup manually after DNS propagation"
+          fi
 
           echo "=== UserData script completed successfully at $(date) ==="
 

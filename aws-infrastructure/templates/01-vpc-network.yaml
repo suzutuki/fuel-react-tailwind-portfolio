@@ -265,6 +265,31 @@ Resources:
   #       プライベートサブネットを追加作成
   # -------------------------------------------------------------------
 
+  # -------------------------------------------------------------------
+  # ALB用の2番目のパブリックサブネット（ALBの要件）
+  # ALBは最低2つのAZに配置する必要がある
+  # -------------------------------------------------------------------
+  PublicSubnetSecond:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      # 異なるAZに配置（ALBの要件）
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]  # 2番目のAZ
+      CidrBlock: 10.0.4.0/24  # 新しい範囲
+      MapPublicIpOnLaunch: true  # パブリックIP自動割り当て
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-public-subnet-second'
+
+  # -------------------------------------------------------------------
+  # 2番目のパブリックサブネットをルートテーブルに関連付け
+  # -------------------------------------------------------------------
+  PublicSubnetSecondRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetSecond
+
   # RDS要件のための2番目のプライベートサブネット（最小限）
   # 注意: RDSはDBサブネットグループに最低2つのサブネットが必要
   PrivateSubnetForRDS:
@@ -315,6 +340,13 @@ Outputs:
     Value: !Ref PublicSubnet
     Export:
       Name: !Sub '${AWS::StackName}-PublicSubnetId'
+
+  # 2番目のパブリックサブネット ID: ALB配置用
+  PublicSubnetSecondId:
+    Description: 'Second Public Subnet ID (ALB配置用)'
+    Value: !Ref PublicSubnetSecond
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnetSecondId'
 
   # EC2セキュリティグループ ID: EC2インスタンス作成時に適用
   EC2SecurityGroupId:

@@ -1,0 +1,375 @@
+# ===================================================================
+# CloudFormation テンプレート: CloudWatch監視機能
+# 目的: EC2/RDS/ALBの監視とアラート通知システム
+# 費用: CloudWatch基本メトリクス（無料）+ SNS（実質無料）
+# ===================================================================
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudWatch Monitoring and Alerting for Portfolio Infrastructure'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: 'portfolio'
+    Description: 'プロジェクト名（リソース名のプレフィックス）'
+
+  Environment:
+    Type: String
+    Default: 'prod'
+    AllowedValues: ['dev', 'staging', 'prod']
+    Description: '環境名（開発・ステージング・本番）'
+
+  EC2StackName:
+    Type: String
+    Default: 'portfolio-prod-ec2'
+    Description: 'EC2スタック名（インスタンスIDをインポート）'
+
+  RDSStackName:
+    Type: String
+    Default: 'portfolio-prod-rds'
+    Description: 'RDSスタック名（DB識別子をインポート）'
+
+  AlertEmail:
+    Type: String
+    Description: 'アラート通知を受信するメールアドレス'
+    AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
+    ConstraintDescription: '有効なメールアドレスを入力してください'
+
+  # TODO(human): アラートしきい値をカスタマイズ可能にする
+  CPUThreshold:
+    Type: Number
+    Default: 80
+    MinValue: 1
+    MaxValue: 100
+    Description: 'CPU使用率アラートしきい値（%）'
+
+  MemoryThreshold:
+    Type: Number
+    Default: 85
+    MinValue: 1
+    MaxValue: 100
+    Description: 'メモリ使用率アラートしきい値（%）'
+
+Resources:
+  # -------------------------------------------------------------------
+  # SNS Topic: アラート通知用
+  # -------------------------------------------------------------------
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${ProjectName}-${Environment}-alerts'
+      DisplayName: !Sub '${ProjectName} ${Environment} Infrastructure Alerts'
+      KmsMasterKeyId: alias/aws/sns  # デフォルト暗号化
+
+  # メール通知の購読設定
+  EmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AlertTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
+  # -------------------------------------------------------------------
+  # EC2監視アラーム
+  # -------------------------------------------------------------------
+
+  # CPU使用率監視
+  EC2CPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-ec2-high-cpu'
+      AlarmDescription: 'EC2インスタンスのCPU使用率が高い状態です'
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300  # 5分間隔
+      EvaluationPeriods: 2  # 2回連続で閾値超過
+      Threshold: !Ref CPUThreshold
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !ImportValue
+            Fn::Sub: '${EC2StackName}-InstanceId'
+      AlarmActions:
+        - !Ref AlertTopic
+      OKActions:
+        - !Ref AlertTopic
+      TreatMissingData: notBreaching
+
+  # ディスク使用率監視（CloudWatch Agentが必要）
+  EC2DiskAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-ec2-high-disk'
+      AlarmDescription: 'EC2インスタンスのディスク使用率が高い状態です'
+      MetricName: DiskSpaceUtilization
+      Namespace: CWAgent
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 85
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !ImportValue
+            Fn::Sub: '${EC2StackName}-InstanceId'
+        - Name: MountPath
+          Value: '/'
+        - Name: Filesystem
+          Value: '/dev/xvda1'
+      AlarmActions:
+        - !Ref AlertTopic
+      TreatMissingData: notBreaching
+
+  # インスタンス健全性チェック
+  EC2StatusCheckAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-ec2-status-check'
+      AlarmDescription: 'EC2インスタンスのステータスチェックが失敗しています'
+      MetricName: StatusCheckFailed
+      Namespace: AWS/EC2
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !ImportValue
+            Fn::Sub: '${EC2StackName}-InstanceId'
+      AlarmActions:
+        - !Ref AlertTopic
+
+  # -------------------------------------------------------------------
+  # RDS監視アラーム
+  # -------------------------------------------------------------------
+
+  # CPU使用率監視
+  RDSCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-rds-high-cpu'
+      AlarmDescription: 'RDSインスタンスのCPU使用率が高い状態です'
+      MetricName: CPUUtilization
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Sub '${ProjectName}-${Environment}-mysql'
+      AlarmActions:
+        - !Ref AlertTopic
+
+  # データベース接続数監視
+  RDSConnectionAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-rds-high-connections'
+      AlarmDescription: 'RDSの接続数が上限に近づいています'
+      MetricName: DatabaseConnections
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 15  # t3.microの接続上限は約20
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Sub '${ProjectName}-${Environment}-mysql'
+      AlarmActions:
+        - !Ref AlertTopic
+
+  # 空きディスク容量監視
+  RDSFreeStorageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-rds-low-storage'
+      AlarmDescription: 'RDSの空きディスク容量が少なくなっています'
+      MetricName: FreeStorageSpace
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 2147483648  # 2GB in bytes
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Sub '${ProjectName}-${Environment}-mysql'
+      AlarmActions:
+        - !Ref AlertTopic
+
+  # -------------------------------------------------------------------
+  # CloudWatch Dashboard（カスタム監視画面）
+  # -------------------------------------------------------------------
+  MonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${ProjectName}-${Environment}-infrastructure'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/EC2", "CPUUtilization", "InstanceId", "${EC2StackName}-InstanceId" ],
+                  [ "AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "${ProjectName}-${Environment}-mysql" ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "CPU使用率",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "max": 100
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "${ProjectName}-${Environment}-mysql" ],
+                  [ "AWS/RDS", "FreeStorageSpace", "DBInstanceIdentifier", "${ProjectName}-${Environment}-mysql" ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "RDS接続数・ストレージ",
+                "period": 300
+              }
+            },
+            {
+              "type": "log",
+              "x": 0,
+              "y": 6,
+              "width": 24,
+              "height": 6,
+              "properties": {
+                "query": "SOURCE '/aws/ec2/user-data' | fields @timestamp, @message\n| sort @timestamp desc\n| limit 100",
+                "region": "${AWS::Region}",
+                "title": "EC2ユーザーデータログ"
+              }
+            }
+          ]
+        }
+
+  # -------------------------------------------------------------------
+  # CloudWatch Agent設定（詳細監視用）
+  # -------------------------------------------------------------------
+  CloudWatchAgentConfig:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/cloudwatch-agent/${ProjectName}-${Environment}/config'
+      Type: String
+      Value: !Sub |
+        {
+          "agent": {
+            "metrics_collection_interval": 60,
+            "run_as_user": "cwagent"
+          },
+          "metrics": {
+            "namespace": "CWAgent",
+            "metrics_collected": {
+              "cpu": {
+                "measurement": [
+                  "cpu_usage_idle",
+                  "cpu_usage_iowait",
+                  "cpu_usage_system",
+                  "cpu_usage_user"
+                ],
+                "metrics_collection_interval": 60
+              },
+              "disk": {
+                "measurement": [
+                  "used_percent"
+                ],
+                "metrics_collection_interval": 60,
+                "resources": [
+                  "*"
+                ]
+              },
+              "diskio": {
+                "measurement": [
+                  "io_time"
+                ],
+                "metrics_collection_interval": 60,
+                "resources": [
+                  "*"
+                ]
+              },
+              "mem": {
+                "measurement": [
+                  "mem_used_percent"
+                ],
+                "metrics_collection_interval": 60
+              },
+              "swap": {
+                "measurement": [
+                  "swap_used_percent"
+                ],
+                "metrics_collection_interval": 60
+              }
+            }
+          }
+        }
+      Description: 'CloudWatch Agent設定（詳細メトリクス収集用）'
+
+Outputs:
+  # SNS通知設定
+  AlertTopicArn:
+    Description: 'アラート通知用SNSトピックARN'
+    Value: !Ref AlertTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-AlertTopicArn'
+
+  # ダッシュボード情報
+  DashboardURL:
+    Description: 'CloudWatch監視ダッシュボードURL'
+    Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ProjectName}-${Environment}-infrastructure'
+
+  # CloudWatch Agent設定
+  CloudWatchAgentConfigParameter:
+    Description: 'CloudWatch Agent設定パラメータ名'
+    Value: !Ref CloudWatchAgentConfig
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudWatchAgentConfig'
+
+  # アラーム一覧
+  EC2CPUAlarmName:
+    Description: 'EC2 CPU使用率アラーム名'
+    Value: !Ref EC2CPUAlarm
+
+  RDSCPUAlarmName:
+    Description: 'RDS CPU使用率アラーム名'
+    Value: !Ref RDSCPUAlarm
+
+# ===================================================================
+# デプロイ後の追加設定手順:
+#
+# 1. EC2インスタンスにCloudWatch Agentをインストール:
+#    sudo yum install -y amazon-cloudwatch-agent
+#
+# 2. CloudWatch Agent設定を適用:
+#    sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+#      -a fetch-config -m ec2 -s -c ssm:${CloudWatchAgentConfigParameter}
+#
+# 3. メール通知の確認（SNS購読確認メールをチェック）
+#
+# 4. ダッシュボードでメトリクスが表示されることを確認
+# ===================================================================
