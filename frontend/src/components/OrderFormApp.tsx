@@ -28,6 +28,7 @@ const OrderFormApp: React.FC<OrderFormAppProps> = ({ onBack }) => {
         resetForm,
         submitForm,
         saveDraft,
+        clearDraft,
     } = useOrderForm();
 
     const handleReset = () => {
@@ -204,6 +205,15 @@ const OrderFormApp: React.FC<OrderFormAppProps> = ({ onBack }) => {
                                 disabled={isLoading}
                             >
                                 リセット
+                            </Button>
+                            <Button
+                                onClick={clearDraft}
+                                variant="outline"
+                                size="lg"
+                                className="px-6 py-3 text-lg border-red-300 text-red-600 hover:bg-red-50"
+                                disabled={isLoading}
+                            >
+                                下書き削除
                             </Button>
                         </div>
                     </CardContent>

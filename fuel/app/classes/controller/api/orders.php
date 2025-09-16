@@ -1,13 +1,103 @@
 <?php
 
-class Controller_Api_Orders extends Controller_Rest
+// Simple database connection helper
+class DB {
+    private static $connection = null;
+
+    public static function getConnection() {
+        if (self::$connection === null) {
+            try {
+                self::$connection = new PDO('sqlite:' . __DIR__ . '/../../../../orders.db');
+                self::$connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                self::createTables();
+            } catch (PDOException $e) {
+                throw new Exception('Database connection failed: ' . $e->getMessage());
+            }
+        }
+        return self::$connection;
+    }
+
+    public static function createTables() {
+        $conn = self::getConnection();
+
+        // Create orders table
+        $conn->exec("CREATE TABLE IF NOT EXISTS orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            receive_order_date TEXT,
+            contract_number TEXT,
+            max_vehicle TEXT,
+            store_code TEXT,
+            house_name TEXT,
+            property_postal_code TEXT,
+            property_prefecture TEXT,
+            property_address TEXT,
+            property_memo TEXT,
+            construction_manager TEXT,
+            construction_manager_phone TEXT,
+            delivery_destination_type TEXT,
+            delivery_postal_code TEXT,
+            delivery_prefecture TEXT,
+            delivery_address TEXT,
+            delivery_phone TEXT,
+            delivery_name TEXT,
+            contact_method TEXT,
+            fax TEXT,
+            email TEXT,
+            email2 TEXT,
+            email3 TEXT,
+            email_cc1 TEXT,
+            email_cc2 TEXT,
+            email_cc3 TEXT,
+            delivery_response_person TEXT,
+            delivery_memo TEXT,
+            created_at DATETIME,
+            updated_at DATETIME
+        )");
+
+        // Create order_details table
+        $conn->exec("CREATE TABLE IF NOT EXISTS order_details (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id INTEGER,
+            product_search TEXT,
+            product_name TEXT,
+            official_product_code TEXT,
+            specification_code TEXT,
+            quantity INTEGER,
+            special_order_flag TEXT,
+            desired_purchase_date TEXT,
+            frequency_category TEXT,
+            arrival_date TEXT,
+            unit_weight TEXT,
+            unit TEXT,
+            carrier_code TEXT,
+            order_unit_price TEXT,
+            total_price TEXT,
+            delivery_unit_price TEXT,
+            total_delivery_unit_price TEXT,
+            customer_unit_price TEXT,
+            total_customer_unit_price TEXT,
+            created_at DATETIME,
+            updated_at DATETIME,
+            FOREIGN KEY (order_id) REFERENCES orders(id)
+        )");
+    }
+}
+
+class Controller_Api_Orders
 {
+    private function response($data, $status = 200) {
+        http_response_code($status);
+        header('Content-Type: application/json');
+        echo json_encode($data);
+        exit;
+    }
+
     public function post_create()
     {
         try {
             // リクエストデータを取得
-            $input = Input::json();
-            
+            $input = json_decode(file_get_contents('php://input'), true);
+
             if (empty($input)) {
                 return $this->response(array(
                     'success' => false,
@@ -15,97 +105,112 @@ class Controller_Api_Orders extends Controller_Rest
                 ), 400);
             }
 
-            // バリデーション
-            $val = Validation::forge('order');
-            $val->add_field('receiveOrderDate', '受注日', 'required');
-            $val->add_field('contractNumber', '契約番号', 'max_length[50]');
-            $val->add_field('storeCode', '店舗コード', 'max_length[20]');
-            $val->add_field('houseName', '住宅名', 'max_length[100]');
-
-            if (!$val->run($input['formData'])) {
+            // 基本的なバリデーション
+            if (empty($input['formData']['receiveOrderDate'])) {
                 return $this->response(array(
                     'success' => false,
-                    'message' => 'バリデーションエラー',
-                    'errors' => $val->error()
+                    'message' => '受注日は必須です'
                 ), 400);
             }
 
-            // トランザクション開始
-            DB::start_transaction();
+            $conn = DB::getConnection();
+            $conn->beginTransaction();
 
             // 受注メインテーブルに挿入
-            $order_id = DB::insert('orders')->set(array(
-                'receive_order_date' => $input['formData']['receiveOrderDate'],
-                'contract_number' => $input['formData']['contractNumber'],
-                'max_vehicle' => $input['formData']['maxVehicle'],
-                'store_code' => $input['formData']['storeCode'],
-                'house_name' => $input['formData']['houseName'],
-                'property_postal_code' => $input['formData']['propertyPostalCode'],
-                'property_prefecture' => $input['formData']['propertyPrefecture'],
-                'property_address' => $input['formData']['propertyAddress'],
-                'property_memo' => $input['formData']['propertyMemo'],
-                'construction_manager' => $input['formData']['constructionManager'],
-                'construction_manager_phone' => $input['formData']['constructionManagerPhone'],
-                'delivery_destination_type' => $input['formData']['deliveryDestinationType'],
-                'delivery_postal_code' => $input['formData']['deliveryPostalCode'],
-                'delivery_prefecture' => $input['formData']['deliveryPrefecture'],
-                'delivery_address' => $input['formData']['deliveryAddress'],
-                'delivery_phone' => $input['formData']['deliveryPhone'],
-                'delivery_name' => $input['formData']['deliveryName'],
-                'contact_method' => $input['formData']['contactMethod'],
-                'fax' => $input['formData']['fax'],
-                'email' => $input['formData']['email'],
-                'email2' => $input['formData']['email2'],
-                'email3' => $input['formData']['email3'],
-                'email_cc1' => $input['formData']['emailCc1'],
-                'email_cc2' => $input['formData']['emailCc2'],
-                'email_cc3' => $input['formData']['emailCc3'],
-                'delivery_response_person' => $input['formData']['deliveryResponsePerson'],
-                'delivery_memo' => $input['formData']['deliveryMemo'],
-                'created_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s')
-            ))->execute();
+            $stmt = $conn->prepare("INSERT INTO orders (
+                receive_order_date, contract_number, max_vehicle, store_code, house_name,
+                property_postal_code, property_prefecture, property_address, property_memo,
+                construction_manager, construction_manager_phone, delivery_destination_type,
+                delivery_postal_code, delivery_prefecture, delivery_address, delivery_phone,
+                delivery_name, contact_method, fax, email, email2, email3, email_cc1,
+                email_cc2, email_cc3, delivery_response_person, delivery_memo,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+
+            $stmt->execute([
+                $input['formData']['receiveOrderDate'],
+                $input['formData']['contractNumber'] ?? '',
+                $input['formData']['maxVehicle'] ?? '',
+                $input['formData']['storeCode'] ?? '',
+                $input['formData']['houseName'] ?? '',
+                $input['formData']['propertyPostalCode'] ?? '',
+                $input['formData']['propertyPrefecture'] ?? '',
+                $input['formData']['propertyAddress'] ?? '',
+                $input['formData']['propertyMemo'] ?? '',
+                $input['formData']['constructionManager'] ?? '',
+                $input['formData']['constructionManagerPhone'] ?? '',
+                $input['formData']['deliveryDestinationType'] ?? '',
+                $input['formData']['deliveryPostalCode'] ?? '',
+                $input['formData']['deliveryPrefecture'] ?? '',
+                $input['formData']['deliveryAddress'] ?? '',
+                $input['formData']['deliveryPhone'] ?? '',
+                $input['formData']['deliveryName'] ?? '',
+                $input['formData']['contactMethod'] ?? '',
+                $input['formData']['fax'] ?? '',
+                $input['formData']['email'] ?? '',
+                $input['formData']['email2'] ?? '',
+                $input['formData']['email3'] ?? '',
+                $input['formData']['emailCc1'] ?? '',
+                $input['formData']['emailCc2'] ?? '',
+                $input['formData']['emailCc3'] ?? '',
+                $input['formData']['deliveryResponsePerson'] ?? '',
+                $input['formData']['deliveryMemo'] ?? '',
+                date('Y-m-d H:i:s'),
+                date('Y-m-d H:i:s')
+            ]);
+
+            $order_id = $conn->lastInsertId();
 
             // 受注明細テーブルに挿入
+            $detailStmt = $conn->prepare("INSERT INTO order_details (
+                order_id, product_search, product_name, official_product_code,
+                specification_code, quantity, special_order_flag, desired_purchase_date,
+                frequency_category, arrival_date, unit_weight, unit, carrier_code,
+                order_unit_price, total_price, delivery_unit_price, total_delivery_unit_price,
+                customer_unit_price, total_customer_unit_price, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+
             foreach ($input['orderDetails'] as $detail) {
-                DB::insert('order_details')->set(array(
-                    'order_id' => $order_id[1],
-                    'product_search' => $detail['productSearch'],
-                    'product_name' => $detail['productName'],
-                    'official_product_code' => $detail['officialProductCode'],
-                    'specification_code' => $detail['specificationCode'],
-                    'quantity' => $detail['quantity'],
-                    'special_order_flag' => $detail['specialOrderFlag'],
-                    'desired_purchase_date' => $detail['desiredPurchaseDate'],
-                    'frequency_category' => $detail['frequencyCategory'],
-                    'arrival_date' => $detail['arrivalDate'],
-                    'unit_weight' => $detail['unitWeight'],
-                    'unit' => $detail['unit'],
-                    'carrier_code' => $detail['carrierCode'],
-                    'order_unit_price' => $detail['orderUnitPrice'],
-                    'total_price' => $detail['totalPrice'],
-                    'delivery_unit_price' => $detail['deliveryUnitPrice'],
-                    'total_delivery_unit_price' => $detail['totalDeliveryUnitPrice'],
-                    'customer_unit_price' => $detail['customerUnitPrice'],
-                    'total_customer_unit_price' => $detail['totalCustomerUnitPrice'],
-                    'created_at' => date('Y-m-d H:i:s'),
-                    'updated_at' => date('Y-m-d H:i:s')
-                ))->execute();
+                $detailStmt->execute([
+                    $order_id,
+                    $detail['productSearch'] ?? '',
+                    $detail['productName'] ?? '',
+                    $detail['officialProductCode'] ?? '',
+                    $detail['specificationCode'] ?? '',
+                    $detail['quantity'] ?? 0,
+                    $detail['specialOrderFlag'] ?? '',
+                    $detail['desiredPurchaseDate'] ?? '',
+                    $detail['frequencyCategory'] ?? '',
+                    $detail['arrivalDate'] ?? '',
+                    $detail['unitWeight'] ?? '',
+                    $detail['unit'] ?? '',
+                    $detail['carrierCode'] ?? '',
+                    $detail['orderUnitPrice'] ?? '',
+                    $detail['totalPrice'] ?? '',
+                    $detail['deliveryUnitPrice'] ?? '',
+                    $detail['totalDeliveryUnitPrice'] ?? '',
+                    $detail['customerUnitPrice'] ?? '',
+                    $detail['totalCustomerUnitPrice'] ?? '',
+                    date('Y-m-d H:i:s'),
+                    date('Y-m-d H:i:s')
+                ]);
             }
 
             // コミット
-            DB::commit_transaction();
+            $conn->commit();
 
             return $this->response(array(
                 'success' => true,
                 'message' => '受注が正常に登録されました',
-                'order_id' => $order_id[1]
+                'order_id' => $order_id
             ), 200);
 
         } catch (Exception $e) {
             // ロールバック
-            DB::rollback_transaction();
-            
+            if (isset($conn)) {
+                $conn->rollback();
+            }
+
             return $this->response(array(
                 'success' => false,
                 'message' => 'データベースエラーが発生しました: ' . $e->getMessage()
@@ -116,20 +221,16 @@ class Controller_Api_Orders extends Controller_Rest
     public function get_list()
     {
         try {
-            // 受注一覧を取得
-            $orders = DB::select()->from('orders')
-                ->order_by('created_at', 'desc')
-                ->execute()
-                ->as_array();
+            $conn = DB::getConnection();
 
-            // TODO(human): フロントエンドとの連携を完成させるため、
-            // 各受注に対応する明細データも取得してフォーマットを整える処理をここに実装してください
-            // ヒント: 受注データに orderDetails プロパティを追加し、
-            // formData プロパティとして必要なフィールドを再構築する必要があります
+            // 受注一覧を取得
+            $stmt = $conn->prepare("SELECT * FROM orders ORDER BY created_at DESC");
+            $stmt->execute();
+            $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             return $this->response(array(
                 'success' => true,
-                'orders' => $orders  // 'data' から 'orders' に変更
+                'orders' => $orders
             ), 200);
 
         } catch (Exception $e) {

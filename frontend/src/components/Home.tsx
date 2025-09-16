@@ -161,7 +161,7 @@ const Home: React.FC = () => {
                             className="px-8 py-3 text-lg font-semibold"
                             onClick={handleStartClick}
                         >
-                            始めましょう
+                            受注入力を始める
                         </Button>
                     </div>
                 </div>

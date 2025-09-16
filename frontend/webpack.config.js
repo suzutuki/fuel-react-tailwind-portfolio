@@ -58,7 +58,7 @@ module.exports = {
             },
         ],
         compress: true,
-        port: 3000,
+        port: 3001,
         host: "0.0.0.0",
         open: true,
         hot: true,
@@ -85,9 +85,19 @@ module.exports = {
         proxy: [
             {
                 context: ['/api'],
-                target: 'http://localhost',
+                target: 'http://localhost:8000',
                 changeOrigin: true,
                 secure: false,
+                logLevel: 'debug',
+                pathRewrite: {
+                    '^/api': '/api'
+                },
+                onError: (err, req, res) => {
+                    console.log('Proxy Error:', err);
+                },
+                onProxyReq: (proxyReq, req, res) => {
+                    console.log('Proxying:', req.method, req.url, 'to', proxyReq.path);
+                }
             },
         ],
     },
