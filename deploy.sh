@@ -10,14 +10,14 @@
 # 2. Reactフロントエンドのプロダクションビルド
 # 3. EC2サーバーへのファイル転送
 # 4. サーバー上でのファイル配置・権限設定
-# 5. デプロイメントの検証
+# 5. デプロイの検証
 #
 # ==================================================
 # 使用方法（Usage）
 # ==================================================
 #
 # 1. 必須環境変数を設定:
-#    export DEPLOY_EC2_HOST="あなたのEC2のIPアドレス"
+#    export DEPLOY_EC2_HOST="EC2のIPアドレス"
 #
 # 2. オプション環境変数（必要に応じて）:
 #    export DEPLOY_EC2_USER="${DEPLOY_EC2_USER:-ec2-user}"              # デフォルト: ${DEPLOY_EC2_USER:-ec2-user}
@@ -30,7 +30,7 @@
 # 実行場所: プロジェクトルートディレクトリ
 #
 # 例:
-#    export DEPLOY_EC2_HOST="${DEPLOY_EC2_HOST}"
+#    export DEPLOY_EC2_HOST="YOUR_EC2_IP_ADDRESS"
 #    ./deploy.sh
 # ==================================================
 
@@ -103,7 +103,7 @@ check_prerequisites() {
     if [ -z "$EC2_HOST" ]; then
         log_error "必須環境変数 DEPLOY_EC2_HOST が設定されていません"
         log_error "使用方法:"
-        log_error "  export DEPLOY_EC2_HOST=\"あなたのEC2のIPアドレス\""
+        log_error "  export DEPLOY_EC2_HOST=\"EC2のIPアドレス\""
         log_error "  ./deploy.sh"
         exit 1
     fi
@@ -128,8 +128,8 @@ check_prerequisites() {
         exit 1
     fi
 
-    # EC2サーバーへのSSH接続をテスト（タイムアウト10秒、バッチモード）
-    if ! ssh -i "$SSH_KEY" -o ConnectTimeout=10 -o BatchMode=yes "$EC2_USER@$EC2_HOST" exit 2>/dev/null; then
+    # EC2サーバーへのSSH接続をテスト（タイムアウト10秒、バッチモード、カスタムポート2222）
+    if ! ssh -i "$SSH_KEY" -p 2222 -o ConnectTimeout=10 -o BatchMode=yes "$EC2_USER@$EC2_HOST" exit 2>/dev/null; then
         log_error "EC2インスタンスに接続できません: $EC2_USER@$EC2_HOST"
         log_error "以下を確認してください："
         log_error "- EC2インスタンスが起動しているか"
@@ -211,14 +211,14 @@ deploy_files() {
 
     # JavaScriptバンドルファイルの転送（メインファイル + チャンクファイル）
     # bundle.js や chunk ファイルなど、.js拡張子のファイルを全て転送
-    if ! scp -i "$SSH_KEY" "$DIST_DIR"/*.js "$EC2_USER@$EC2_HOST:/tmp/"; then
+    if ! scp -i "$SSH_KEY" -P 2222 "$DIST_DIR"/*.js "$EC2_USER@$EC2_HOST:/tmp/"; then
         log_error "JavaScriptバンドルの転送に失敗しました"
         log_error "可能な原因：ネットワーク接続、SSH権限、ディスク容量"
         exit 1
     fi
 
     # HTMLファイルの転送（アプリケーションのエントリーポイント）
-    if ! scp -i "$SSH_KEY" "$DIST_DIR/index.html" "$EC2_USER@$EC2_HOST:/tmp/"; then
+    if ! scp -i "$SSH_KEY" -P 2222 "$DIST_DIR/index.html" "$EC2_USER@$EC2_HOST:/tmp/"; then
         log_error "index.htmlの転送に失敗しました"
         exit 1
     fi
@@ -253,7 +253,7 @@ deploy_files() {
     log_info "プロダクションサーバー上でファイルを設定中..."
 
     # 複数のコマンドを一つのSSHセッションで実行（効率とアトミック性のため）
-    if ! ssh -i "$SSH_KEY" "$EC2_USER@$EC2_HOST" "
+    if ! ssh -i "$SSH_KEY" -p 2222 "$EC2_USER@$EC2_HOST" "
         # フロントエンドファイルの配置
         # /tmpから/var/www/htmlにコピーし、nginx用の権限を設定
         sudo cp /tmp/*.js $WEB_ROOT/ &&
@@ -300,18 +300,18 @@ deploy_files() {
     # ==================================================
     # 新しいファイルが適切に提供されるように設定を再読み込み
     log_info "Nginx設定をリロードしています..."
-    if ! ssh -i "$SSH_KEY" "$EC2_USER@$EC2_HOST" "sudo systemctl reload nginx"; then
+    if ! ssh -i "$SSH_KEY" -p 2222 "$EC2_USER@$EC2_HOST" "sudo systemctl reload nginx"; then
         log_warning "Nginxのリロードに失敗しました（これは致命的ではない可能性があります）"
         log_warning "手動でNginxの状態を確認することをお勧めします"
     else
         log_success "Nginx正常にリロードされました"
     fi
 
-    log_success "ファイルデプロイメント完了"
+    log_success "ファイルデプロイ完了"
 }
 
 # ==================================================
-# デプロイメント検証関数
+# デプロイ検証関数
 # ==================================================
 # デプロイされたファイルが正しく動作しているかを検証します
 # - Webサイトのアクセシビリティチェック
@@ -320,7 +320,7 @@ deploy_files() {
 # - PHP APIエンドポイントの動作確認
 # - 静的アセットのアクセシビリティチェック
 verify_deployment() {
-    log_info "デプロイメントを検証しています..."
+    log_info "デプロイを検証しています..."
 
     # ==================================================
     # メインWebサイトのアクセシビリティチェック
@@ -357,7 +357,7 @@ verify_deployment() {
     fi
 
 
-    log_success "デプロイメント検証完了"
+    log_success "デプロイ検証完了"
     log_info "Webサイト: https://suzutuki-portfolio.com"
 }
 
@@ -372,13 +372,13 @@ cleanup() {
 }
 
 # ==================================================
-# メインデプロイメントプロセス
+# メインデプロイプロセス
 # ==================================================
-# デプロイメントの全工程を順序実行します
+# デプロイの全工程を順序実行します
 # 1. 前提条件チェック -> 2. ビルド -> 3. ファイルデプロイ -> 4. 検証
 main() {
     log_info "==================================================="
-    log_info "デプロイメントプロセスを開始します"
+    log_info "デプロイプロセスを開始します"
     log_info "==================================================="
 
     # スクリプト終了時にクリーンアップを実行するトラップを設定
@@ -386,7 +386,7 @@ main() {
     trap cleanup EXIT
 
     # ==================================================
-    # デプロイメントステップの順序実行
+    # デプロイステップの順序実行
     # ==================================================
     # Step 1: デプロイに必要な環境とリソースの確認
     check_prerequisites
@@ -401,10 +401,10 @@ main() {
     verify_deployment
 
     # ==================================================
-    # デプロイメント完了
+    # デプロイ完了
     # ==================================================
     log_success "==================================================="
-    log_success "デプロイメントが正常に完了しました！"
+    log_success "デプロイが正常に完了しました！"
     log_success "==================================================="
     log_info "アクセスURL: https://suzutuki-portfolio.com"
     log_info "デプロイ日時: $(date)"
