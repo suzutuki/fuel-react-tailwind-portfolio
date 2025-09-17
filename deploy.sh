@@ -4,159 +4,239 @@
 # Production Deployment Script
 # FuelPHP + React Application Deployment
 # ==================================================
+#
+# このスクリプトは以下の処理を自動実行します：
+# 1. 前提条件の確認（SSH接続、ディレクトリ存在など）
+# 2. Reactフロントエンドのプロダクションビルド
+# 3. EC2サーバーへのファイル転送
+# 4. サーバー上でのファイル配置・権限設定
+# 5. デプロイメントの検証
+#
+# 使用方法: ./deploy.sh
+# 実行場所: プロジェクトルートディレクトリ
+# ==================================================
 
-set -e  # Exit on any error
+# エラーが発生した場合は即座にスクリプトを終了
+set -e
 
-# Configuration
-PROJECT_DIR="/mnt/c/xampp/htdocs/fuel-react-app"
-FRONTEND_DIR="$PROJECT_DIR/frontend"
-DIST_DIR="$PROJECT_DIR/dist"
-EC2_USER="${DEPLOY_EC2_USER:-ec2-user}"
-EC2_HOST="${DEPLOY_EC2_HOST}"
-SSH_KEY="$HOME/.ssh/${DEPLOY_SSH_KEY:-temp-keypair.pem}"
-WEB_ROOT="/var/www/html"
+# ==================================================
+# 設定値（Configuration）
+# ==================================================
+# プロジェクトの各ディレクトリパス
+PROJECT_DIR="/mnt/c/xampp/htdocs/fuel-react-app"  # プロジェクトルート
+FRONTEND_DIR="$PROJECT_DIR/frontend"              # Reactアプリのソースディレクトリ
+DIST_DIR="$PROJECT_DIR/dist"                      # ビルド成果物の出力先
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# EC2サーバーへの接続情報
+EC2_USER="${DEPLOY_EC2_USER:-ec2-user}"                               # EC2インスタンスのユーザー名
+EC2_HOST="${DEPLOY_EC2_HOST}"                          # EC2インスタンスのIPアドレス
+SSH_KEY="$HOME/.ssh/${DEPLOY_SSH_KEY:-temp-keypair.pem}"            # SSH秘密鍵のパス
+WEB_ROOT="/var/www/html"                         # EC2サーバーのWebルートディレクトリ
 
-# Helper functions
+# ==================================================
+# 出力用の色設定（Color Configuration）
+# ==================================================
+RED='\033[0;31m'      # エラーメッセージ用
+GREEN='\033[0;32m'    # 成功メッセージ用
+YELLOW='\033[1;33m'   # 警告メッセージ用
+BLUE='\033[0;34m'     # 情報メッセージ用
+NC='\033[0m'          # 色をリセット（No Color）
+
+# ==================================================
+# ログ出力用のヘルパー関数
+# ==================================================
+# 情報メッセージを青色で出力
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
 }
 
+# 成功メッセージを緑色で出力
 log_success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
+# 警告メッセージを黄色で出力
 log_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
+# エラーメッセージを赤色で出力
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Check prerequisites
+# ==================================================
+# 前提条件チェック関数
+# ==================================================
+# デプロイに必要な条件が整っているかを確認します
+# - フロントエンドディレクトリの存在
+# - SSH秘密鍵ファイルの存在
+# - EC2サーバーへのSSH接続可能性
 check_prerequisites() {
-    log_info "Checking prerequisites..."
+    log_info "前提条件をチェックしています..."
 
-    # Check if frontend directory exists
+    # フロントエンドディレクトリが存在するかチェック
     if [ ! -d "$FRONTEND_DIR" ]; then
-        log_error "Frontend directory not found: $FRONTEND_DIR"
+        log_error "フロントエンドディレクトリが見つかりません: $FRONTEND_DIR"
         exit 1
     fi
 
-    # Check if SSH key exists
+    # SSH秘密鍵ファイルが存在するかチェック
     if [ ! -f "$SSH_KEY" ]; then
-        log_error "SSH key not found: $SSH_KEY"
+        log_error "SSH秘密鍵が見つかりません: $SSH_KEY"
+        log_error "EC2インスタンス用のSSH鍵を適切な場所に配置してください"
         exit 1
     fi
 
-    # Check SSH connection
+    # EC2サーバーへのSSH接続をテスト（タイムアウト10秒、バッチモード）
     if ! ssh -i "$SSH_KEY" -o ConnectTimeout=10 -o BatchMode=yes "$EC2_USER@$EC2_HOST" exit 2>/dev/null; then
-        log_error "Cannot connect to EC2 instance: $EC2_USER@$EC2_HOST"
+        log_error "EC2インスタンスに接続できません: $EC2_USER@$EC2_HOST"
+        log_error "以下を確認してください："
+        log_error "- EC2インスタンスが起動しているか"
+        log_error "- セキュリティグループでSSH(22番ポート)が許可されているか"
+        log_error "- SSH鍵が正しいか"
         exit 1
     fi
 
-    log_success "Prerequisites check passed"
+    log_success "前提条件チェック完了"
 }
 
-# Build frontend application
+# ==================================================
+# フロントエンドビルド関数
+# ==================================================
+# Reactアプリケーションをプロダクション用にビルドします
+# - 依存関係のインストール（必要な場合）
+# - Webpackによる最適化・圧縮
+# - ビルド成果物の検証
 build_frontend() {
-    log_info "Building frontend application..."
+    log_info "フロントエンドアプリケーションをビルドしています..."
 
+    # フロントエンドディレクトリに移動
     cd "$FRONTEND_DIR"
 
-    # Check if node_modules exists
+    # node_modulesディレクトリの存在をチェック
+    # 存在しない場合は依存関係をインストール
     if [ ! -d "node_modules" ]; then
-        log_warning "node_modules not found. Running npm install..."
+        log_warning "node_modulesが見つかりません。npm installを実行します..."
         npm install
     fi
 
-    # Run production build
-    log_info "Running production build..."
+    # プロダクション用ビルドを実行
+    # Webpackが以下を実行します：
+    # - TypeScript/JSXのコンパイル
+    # - CSSの最適化
+    # - ファイルの圧縮・最適化
+    # - チャンク分割
+    log_info "プロダクションビルドを実行中..."
     npm run build
 
-    # Verify build output
+    # ビルド成果物の存在を確認
+    # bundle.js（メインのJavaScriptファイル）
     if [ ! -f "$DIST_DIR/bundle.js" ]; then
-        log_error "Build failed: bundle.js not found in $DIST_DIR"
+        log_error "ビルド失敗: bundle.jsが見つかりません in $DIST_DIR"
+        log_error "Webpackの設定またはビルドプロセスに問題があります"
         exit 1
     fi
 
+    # index.html（メインのHTMLファイル）
     if [ ! -f "$DIST_DIR/index.html" ]; then
-        log_error "Build failed: index.html not found in $DIST_DIR"
+        log_error "ビルド失敗: index.htmlが見つかりません in $DIST_DIR"
+        log_error "Webpackの設定またはビルドプロセスに問題があります"
         exit 1
     fi
 
-    log_success "Frontend build completed successfully"
+    log_success "フロントエンドビルド完了"
 
-    # Show build info
+    # ビルド結果の情報を表示
+    # バンドルサイズを計算して表示（KB単位）
     local bundle_size=$(stat -c%s "$DIST_DIR/bundle.js" 2>/dev/null || stat -f%z "$DIST_DIR/bundle.js" 2>/dev/null)
-    log_info "Bundle size: $(($bundle_size / 1024))KB"
+    log_info "バンドルサイズ: $(($bundle_size / 1024))KB"
 }
 
-# Deploy files to production server
+# ==================================================
+# ファイルデプロイ関数
+# ==================================================
+# ビルドされたファイルをEC2サーバーに転送し、適切に配置します
+# フェーズ1: ローカルからEC2の一時ディレクトリへファイル転送
+# フェーズ2: EC2サーバー内でファイルを本番ディレクトリに移動・権限設定
 deploy_files() {
-    log_info "Deploying files to production server..."
+    log_info "プロダクションサーバーにファイルをデプロイしています..."
 
-    # Transfer files to EC2 temporary directory
-    log_info "Transferring frontend files to EC2..."
+    # ==================================================
+    # フェーズ1: ファイル転送（SCP使用）
+    # ==================================================
+    # セキュリティ上、まず/tmpディレクトリに転送してから移動
+    log_info "フロントエンドファイルをEC2に転送中..."
 
-    # Transfer all JS bundles (including chunks)
+    # JavaScriptバンドルファイルの転送（メインファイル + チャンクファイル）
+    # bundle.js や chunk ファイルなど、.js拡張子のファイルを全て転送
     if ! scp -i "$SSH_KEY" "$DIST_DIR"/*.js "$EC2_USER@$EC2_HOST:/tmp/"; then
-        log_error "Failed to transfer JavaScript bundles"
+        log_error "JavaScriptバンドルの転送に失敗しました"
+        log_error "可能な原因：ネットワーク接続、SSH権限、ディスク容量"
         exit 1
     fi
 
+    # HTMLファイルの転送（アプリケーションのエントリーポイント）
     if ! scp -i "$SSH_KEY" "$DIST_DIR/index.html" "$EC2_USER@$EC2_HOST:/tmp/"; then
-        log_error "Failed to transfer index.html"
+        log_error "index.htmlの転送に失敗しました"
         exit 1
     fi
 
-    # Transfer PHP backend files
-    log_info "Transferring PHP backend files..."
+    # PHPバックエンドファイルの転送（FuelPHPフレームワーク全体）
+    # APIエンドポイント、データベース処理、設定ファイルなどを含む
+    log_info "PHPバックエンドファイルを転送中..."
     if ! scp -r -i "$SSH_KEY" "$PROJECT_DIR/fuel" "$EC2_USER@$EC2_HOST:/tmp/"; then
-        log_error "Failed to transfer PHP backend"
+        log_error "PHPバックエンドの転送に失敗しました"
+        log_error "FuelPHPディレクトリ構造またはファイル権限を確認してください"
         exit 1
     fi
 
-    # Transfer images directory
-    log_info "Transferring images..."
+    # 画像ファイルの転送（オプション）
+    # 画像ディレクトリが存在する場合のみ転送
+    log_info "画像ファイルを転送中..."
     if [ -d "$FRONTEND_DIR/public/images" ]; then
         if ! scp -r -i "$SSH_KEY" "$FRONTEND_DIR/public/images" "$EC2_USER@$EC2_HOST:/tmp/"; then
-            log_error "Failed to transfer images directory"
+            log_error "画像ディレクトリの転送に失敗しました"
             exit 1
         fi
-        log_success "Images transferred successfully"
+        log_success "画像ファイルの転送完了"
     else
-        log_warning "Images directory not found, skipping..."
+        log_warning "画像ディレクトリが見つかりません。スキップします..."
     fi
 
-    log_success "Files transferred successfully"
+    log_success "全ファイルの転送完了"
 
-    # Move files to web root and set proper permissions
-    log_info "Setting up files on production server..."
+    # ==================================================
+    # フェーズ2: EC2サーバー内でのファイル配置と権限設定
+    # ==================================================
+    log_info "プロダクションサーバー上でファイルを設定中..."
 
+    # 複数のコマンドを一つのSSHセッションで実行（効率とアトミック性のため）
     if ! ssh -i "$SSH_KEY" "$EC2_USER@$EC2_HOST" "
+        # フロントエンドファイルの配置
+        # /tmpから/var/www/htmlにコピーし、nginx用の権限を設定
         sudo cp /tmp/*.js $WEB_ROOT/ &&
         sudo cp /tmp/index.html $WEB_ROOT/ &&
         sudo chown nginx:nginx $WEB_ROOT/*.js $WEB_ROOT/index.html &&
         sudo chmod 644 $WEB_ROOT/*.js $WEB_ROOT/index.html &&
 
-        # Setup PHP backend
+        # PHPバックエンドの配置
+        # FuelPHPディレクトリ全体をWebルートにコピー
         if [ -d /tmp/fuel ]; then
             sudo cp -r /tmp/fuel $WEB_ROOT/ &&
+            # ファイルの所有者をnginxに変更（Webサーバーがアクセスできるように）
             sudo chown -R nginx:nginx $WEB_ROOT/fuel &&
+            # 基本的なファイル権限を644（読み取り専用）に設定
             sudo chmod -R 644 $WEB_ROOT/fuel &&
-            sudo find $WEB_ROOT/fuel -type d -exec chmod 755 {} \; &&
+            # ディレクトリには実行権限（755）を付与
+            sudo find $WEB_ROOT/fuel -type d -exec chmod 755 {} \\; &&
+            # PHPのエントリーポイントに実行権限を付与
             sudo chmod 755 $WEB_ROOT/fuel/public/index.php &&
+            # 一時ディレクトリのクリーンアップ
             rm -rf /tmp/fuel
         fi &&
 
+        # 画像ファイルの配置（存在する場合）
         if [ -d /tmp/images ]; then
             sudo cp -r /tmp/images $WEB_ROOT/ &&
             sudo chown -R nginx:nginx $WEB_ROOT/images &&
@@ -164,99 +244,136 @@ deploy_files() {
             sudo chmod 755 $WEB_ROOT/images &&
             rm -rf /tmp/images
         fi &&
+        # フロントエンドファイルの一時ファイルクリーンアップ
         rm -f /tmp/*.js /tmp/index.html
     "; then
-        log_error "Failed to deploy files on production server"
+        log_error "プロダクションサーバーでのファイル配置に失敗しました"
+        log_error "可能な原因：sudo権限、ディスク容量、ファイル権限"
         exit 1
     fi
 
-    log_success "Files deployed and permissions set"
+    log_success "ファイル配置と権限設定完了"
 
-    # Reload Nginx configuration (optional, but good practice)
-    log_info "Reloading Nginx configuration..."
+    # ==================================================
+    # Nginxの設定リロード
+    # ==================================================
+    # 新しいファイルが適切に提供されるように設定を再読み込み
+    log_info "Nginx設定をリロードしています..."
     if ! ssh -i "$SSH_KEY" "$EC2_USER@$EC2_HOST" "sudo systemctl reload nginx"; then
-        log_warning "Failed to reload Nginx (this may not be critical)"
+        log_warning "Nginxのリロードに失敗しました（これは致命的ではない可能性があります）"
+        log_warning "手動でNginxの状態を確認することをお勧めします"
     else
-        log_success "Nginx reloaded successfully"
+        log_success "Nginx正常にリロードされました"
     fi
 
-    log_success "File deployment completed"
+    log_success "ファイルデプロイメント完了"
 }
 
-# Verify deployment
+# ==================================================
+# デプロイメント検証関数
+# ==================================================
+# デプロイされたファイルが正しく動作しているかを検証します
+# - Webサイトのアクセシビリティチェック
+# - JavaScriptバンドルのアクセシビリティチェック
+# - ファイル整合性チェック
+# - PHP APIエンドポイントの動作確認
+# - 静的アセットのアクセシビリティチェック
 verify_deployment() {
-    log_info "Verifying deployment..."
+    log_info "デプロイメントを検証しています..."
 
-    # Check HTTPS response
+    # ==================================================
+    # メインWebサイトのアクセシビリティチェック
+    # ==================================================
+    # HTTPSでアクセスし、HTTP 200ステータスが返されるか確認
     local http_status=$(curl -s -o /dev/null -w "%{http_code}" "https://suzutuki-portfolio.com")
     if [ "$http_status" != "200" ]; then
-        log_error "Website not responding correctly (HTTP $http_status)"
+        log_error "Webサイトが正しく応答していません (HTTP $http_status)"
+        log_error "DNS設定、SSL証明書、またはNginx設定を確認してください"
         return 1
     fi
 
-    # Check bundle.js
+    # ==================================================
+    # JavaScriptバンドルのアクセシビリティチェック
+    # ==================================================
+    # ReactアプリケーションのメインJavaScriptファイルがアクセス可能か確認
     local bundle_status=$(curl -s -o /dev/null -w "%{http_code}" "https://suzutuki-portfolio.com/bundle.js")
     if [ "$bundle_status" != "200" ]; then
-        log_error "Bundle.js not accessible (HTTP $bundle_status)"
+        log_error "bundle.jsにアクセスできません (HTTP $bundle_status)"
+        log_error "ファイルのアップロードまたは権限設定に問題がある可能性があります"
         return 1
     fi
 
-    # Check bundle size on server
-    local remote_size=$(ssh -i "$SSH_KEY" "$EC2_USER@$EC2_HOST" "stat -c%s /var/www/html/bundle.js" 2>/dev/null)
-    local local_size=$(stat -c%s "$DIST_DIR/bundle.js" 2>/dev/null || stat -f%z "$DIST_DIR/bundle.js" 2>/dev/null)
 
-    if [ "$remote_size" != "$local_size" ]; then
-        log_warning "File size mismatch: local=$local_size, remote=$remote_size"
-    else
-        log_success "File sizes match: $local_size bytes"
-    fi
-
-    # Check PHP API deployment
-    log_info "Verifying PHP API deployment..."
+    # ==================================================
+    # PHP APIの基本動作確認
+    # ==================================================
+    log_info "PHP APIの動作を確認中..."
     local api_status=$(curl -s -o /dev/null -w "%{http_code}" "https://suzutuki-portfolio.com/fuel/public/")
     if [ "$api_status" = "200" ]; then
-        log_success "PHP API deployed successfully"
+        log_success "PHP API正常に動作中"
     else
-        log_warning "PHP API not accessible (HTTP $api_status)"
+        log_warning "PHP APIの動作確認をスキップ (HTTP $api_status)"
     fi
 
-    # Check images deployment
-    log_info "Verifying images deployment..."
-    local image_status=$(curl -s -o /dev/null -w "%{http_code}" "https://suzutuki-portfolio.com/images/fuelphp-icon.png")
-    if [ "$image_status" = "200" ]; then
-        log_success "Images deployed successfully"
-    else
-        log_warning "Images not accessible (HTTP $image_status)"
-    fi
 
-    log_success "Deployment verification completed"
-    log_info "Website: https://suzutuki-portfolio.com"
+    log_success "デプロイメント検証完了"
+    log_info "Webサイト: https://suzutuki-portfolio.com"
 }
 
-# Cleanup function
+# ==================================================
+# クリーンアップ関数
+# ==================================================
+# スクリプト終了時に一時ファイルやリソースのクリーンアップを実行
 cleanup() {
-    log_info "Cleaning up temporary files..."
-    # Add cleanup logic here if needed
+    log_info "一時ファイルをクリーンアップしています..."
+    # 必要に応じてクリーンアップロジックをここに追加
+    # 例: ロックファイルの削除、一時ディレクトリの削除など
 }
 
-# Main deployment process
+# ==================================================
+# メインデプロイメントプロセス
+# ==================================================
+# デプロイメントの全工程を順序実行します
+# 1. 前提条件チェック -> 2. ビルド -> 3. ファイルデプロイ -> 4. 検証
 main() {
-    log_info "Starting deployment process..."
+    log_info "==================================================="
+    log_info "デプロイメントプロセスを開始します"
+    log_info "==================================================="
 
-    # Set trap for cleanup on exit
+    # スクリプト終了時にクリーンアップを実行するトラップを設定
+    # エラーや中断が発生してもクリーンアップが実行される
     trap cleanup EXIT
 
-    # Run deployment steps
+    # ==================================================
+    # デプロイメントステップの順序実行
+    # ==================================================
+    # Step 1: デプロイに必要な環境とリソースの確認
     check_prerequisites
+
+    # Step 2: Reactアプリケーションのプロダクションビルド
     build_frontend
+
+    # Step 3: ビルド成果物とバックエンドファイルのサーバーへのデプロイ
     deploy_files
+
+    # Step 4: デプロイされたアプリケーションの動作検証
     verify_deployment
 
-    log_success "Deployment completed successfully!"
-    log_info "Website deployed to: https://suzutuki-portfolio.com"
+    # ==================================================
+    # デプロイメント完了
+    # ==================================================
+    log_success "==================================================="
+    log_success "デプロイメントが正常に完了しました！"
+    log_success "==================================================="
+    log_info "アクセスURL: https://suzutuki-portfolio.com"
+    log_info "デプロイ日時: $(date)"
 }
 
-# Script entry point
+# ==================================================
+# スクリプトエントリーポイント
+# ==================================================
+# スクリプトが直接実行された場合のみメイン関数を呼び出し
+# 他のスクリプトからsourceされた場合は関数定義のみを行う
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     main "$@"
 fi
