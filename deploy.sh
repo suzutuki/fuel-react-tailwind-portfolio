@@ -12,8 +12,26 @@
 # 4. サーバー上でのファイル配置・権限設定
 # 5. デプロイメントの検証
 #
-# 使用方法: ./deploy.sh
+# ==================================================
+# 使用方法（Usage）
+# ==================================================
+#
+# 1. 必須環境変数を設定:
+#    export DEPLOY_EC2_HOST="あなたのEC2のIPアドレス"
+#
+# 2. オプション環境変数（必要に応じて）:
+#    export DEPLOY_EC2_USER="${DEPLOY_EC2_USER:-ec2-user}"              # デフォルト: ${DEPLOY_EC2_USER:-ec2-user}
+#    export DEPLOY_SSH_KEY="/path/to/your/key.pem"  # デフォルト: ~/.ssh/${DEPLOY_SSH_KEY:-temp-keypair.pem}
+#    export DEPLOY_WEB_ROOT="/var/www/html"         # デフォルト: /var/www/html
+#
+# 3. スクリプト実行:
+#    ./deploy.sh
+#
 # 実行場所: プロジェクトルートディレクトリ
+#
+# 例:
+#    export DEPLOY_EC2_HOST="${DEPLOY_EC2_HOST}"
+#    ./deploy.sh
 # ==================================================
 
 # エラーが発生した場合は即座にスクリプトを終了
@@ -22,16 +40,19 @@ set -e
 # ==================================================
 # 設定値（Configuration）
 # ==================================================
-# プロジェクトの各ディレクトリパス
-PROJECT_DIR="/mnt/c/xampp/htdocs/fuel-react-app"  # プロジェクトルート
-FRONTEND_DIR="$PROJECT_DIR/frontend"              # Reactアプリのソースディレクトリ
-DIST_DIR="$PROJECT_DIR/dist"                      # ビルド成果物の出力先
+# 環境変数から設定を読み込み（セキュリティ向上のため）
+# 本番サーバーの情報をGitリポジトリに含めないようにします
 
-# EC2サーバーへの接続情報
-EC2_USER="${DEPLOY_EC2_USER:-ec2-user}"                               # EC2インスタンスのユーザー名
-EC2_HOST="${DEPLOY_EC2_HOST}"                          # EC2インスタンスのIPアドレス
-SSH_KEY="$HOME/.ssh/${DEPLOY_SSH_KEY:-temp-keypair.pem}"            # SSH秘密鍵のパス
-WEB_ROOT="/var/www/html"                         # EC2サーバーのWebルートディレクトリ
+# プロジェクトの各ディレクトリパス
+PROJECT_DIR="${DEPLOY_PROJECT_DIR:-/mnt/c/xampp/htdocs/fuel-react-app}"  # プロジェクトルート
+FRONTEND_DIR="$PROJECT_DIR/frontend"                                     # Reactアプリのソースディレクトリ
+DIST_DIR="$PROJECT_DIR/dist"                                             # ビルド成果物の出力先
+
+# EC2サーバーへの接続情報（環境変数から取得）
+EC2_USER="${DEPLOY_EC2_USER:-${DEPLOY_EC2_USER:-ec2-user}}"           # EC2インスタンスのユーザー名
+EC2_HOST="${DEPLOY_EC2_HOST}"                     # EC2インスタンスのIPアドレス（必須）
+SSH_KEY="${DEPLOY_SSH_KEY:-$HOME/.ssh/${DEPLOY_SSH_KEY:-temp-keypair.pem}}"  # SSH秘密鍵のパス
+WEB_ROOT="${DEPLOY_WEB_ROOT:-/var/www/html}"      # EC2サーバーのWebルートディレクトリ
 
 # ==================================================
 # 出力用の色設定（Color Configuration）
@@ -69,11 +90,29 @@ log_error() {
 # 前提条件チェック関数
 # ==================================================
 # デプロイに必要な条件が整っているかを確認します
+# - 必須環境変数の設定
 # - フロントエンドディレクトリの存在
 # - SSH秘密鍵ファイルの存在
 # - EC2サーバーへのSSH接続可能性
 check_prerequisites() {
     log_info "前提条件をチェックしています..."
+
+    # ==================================================
+    # 必須環境変数の検証
+    # ==================================================
+    if [ -z "$EC2_HOST" ]; then
+        log_error "必須環境変数 DEPLOY_EC2_HOST が設定されていません"
+        log_error "使用方法:"
+        log_error "  export DEPLOY_EC2_HOST=\"あなたのEC2のIPアドレス\""
+        log_error "  ./deploy.sh"
+        exit 1
+    fi
+
+    log_info "使用する設定:"
+    log_info "  EC2ホスト: $EC2_HOST"
+    log_info "  EC2ユーザー: $EC2_USER"
+    log_info "  SSH鍵: $SSH_KEY"
+    log_info "  Webルート: $WEB_ROOT"
 
     # フロントエンドディレクトリが存在するかチェック
     if [ ! -d "$FRONTEND_DIR" ]; then
@@ -85,6 +124,7 @@ check_prerequisites() {
     if [ ! -f "$SSH_KEY" ]; then
         log_error "SSH秘密鍵が見つかりません: $SSH_KEY"
         log_error "EC2インスタンス用のSSH鍵を適切な場所に配置してください"
+        log_error "または環境変数 DEPLOY_SSH_KEY でパスを指定してください"
         exit 1
     fi
 
@@ -95,6 +135,7 @@ check_prerequisites() {
         log_error "- EC2インスタンスが起動しているか"
         log_error "- セキュリティグループでSSH(22番ポート)が許可されているか"
         log_error "- SSH鍵が正しいか"
+        log_error "- DEPLOY_EC2_HOST環境変数が正しく設定されているか"
         exit 1
     fi
 
