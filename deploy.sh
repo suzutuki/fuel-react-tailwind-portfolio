@@ -104,15 +104,23 @@ deploy_files() {
     log_info "Deploying files to production server..."
 
     # Transfer files to EC2 temporary directory
-    log_info "Transferring files to EC2..."
+    log_info "Transferring frontend files to EC2..."
 
-    if ! scp -i "$SSH_KEY" "$DIST_DIR/bundle.js" "$EC2_USER@$EC2_HOST:/tmp/"; then
-        log_error "Failed to transfer bundle.js"
+    # Transfer all JS bundles (including chunks)
+    if ! scp -i "$SSH_KEY" "$DIST_DIR"/*.js "$EC2_USER@$EC2_HOST:/tmp/"; then
+        log_error "Failed to transfer JavaScript bundles"
         exit 1
     fi
 
     if ! scp -i "$SSH_KEY" "$DIST_DIR/index.html" "$EC2_USER@$EC2_HOST:/tmp/"; then
         log_error "Failed to transfer index.html"
+        exit 1
+    fi
+
+    # Transfer PHP backend files
+    log_info "Transferring PHP backend files..."
+    if ! scp -r -i "$SSH_KEY" "$PROJECT_DIR/fuel" "$EC2_USER@$EC2_HOST:/tmp/"; then
+        log_error "Failed to transfer PHP backend"
         exit 1
     fi
 
@@ -134,10 +142,21 @@ deploy_files() {
     log_info "Setting up files on production server..."
 
     if ! ssh -i "$SSH_KEY" "$EC2_USER@$EC2_HOST" "
-        sudo cp /tmp/bundle.js $WEB_ROOT/ &&
+        sudo cp /tmp/*.js $WEB_ROOT/ &&
         sudo cp /tmp/index.html $WEB_ROOT/ &&
-        sudo chown nginx:nginx $WEB_ROOT/bundle.js $WEB_ROOT/index.html &&
-        sudo chmod 644 $WEB_ROOT/bundle.js $WEB_ROOT/index.html &&
+        sudo chown nginx:nginx $WEB_ROOT/*.js $WEB_ROOT/index.html &&
+        sudo chmod 644 $WEB_ROOT/*.js $WEB_ROOT/index.html &&
+
+        # Setup PHP backend
+        if [ -d /tmp/fuel ]; then
+            sudo cp -r /tmp/fuel $WEB_ROOT/ &&
+            sudo chown -R nginx:nginx $WEB_ROOT/fuel &&
+            sudo chmod -R 644 $WEB_ROOT/fuel &&
+            sudo find $WEB_ROOT/fuel -type d -exec chmod 755 {} \; &&
+            sudo chmod 755 $WEB_ROOT/fuel/public/index.php &&
+            rm -rf /tmp/fuel
+        fi &&
+
         if [ -d /tmp/images ]; then
             sudo cp -r /tmp/images $WEB_ROOT/ &&
             sudo chown -R nginx:nginx $WEB_ROOT/images &&
@@ -145,7 +164,7 @@ deploy_files() {
             sudo chmod 755 $WEB_ROOT/images &&
             rm -rf /tmp/images
         fi &&
-        rm -f /tmp/bundle.js /tmp/index.html
+        rm -f /tmp/*.js /tmp/index.html
     "; then
         log_error "Failed to deploy files on production server"
         exit 1
@@ -190,6 +209,15 @@ verify_deployment() {
         log_warning "File size mismatch: local=$local_size, remote=$remote_size"
     else
         log_success "File sizes match: $local_size bytes"
+    fi
+
+    # Check PHP API deployment
+    log_info "Verifying PHP API deployment..."
+    local api_status=$(curl -s -o /dev/null -w "%{http_code}" "https://suzutuki-portfolio.com/fuel/public/")
+    if [ "$api_status" = "200" ]; then
+        log_success "PHP API deployed successfully"
+    else
+        log_warning "PHP API not accessible (HTTP $api_status)"
     fi
 
     # Check images deployment

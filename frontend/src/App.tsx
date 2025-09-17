@@ -1,13 +1,8 @@
 import React from "react";
-import Home from "./components/Home";
-import { Button } from "@/components/ui/button";
+import Home from './components/Home';
 
 const App: React.FC = () => {
-    return (
-        <div className="App">
-            <Home />
-        </div>
-    );
+    return <Home />;
 };
 
 export default App;

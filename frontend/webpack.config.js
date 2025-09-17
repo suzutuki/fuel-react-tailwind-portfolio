@@ -1,4 +1,5 @@
 const path = require("path");
+const webpack = require("webpack");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const ReactRefreshWebpackPlugin = require("@pmmmwh/react-refresh-webpack-plugin");
 
@@ -49,6 +50,10 @@ module.exports = {
             template: "./public/index.html",
         }),
         new ReactRefreshWebpackPlugin(),
+        new webpack.DefinePlugin({
+            'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+            'process.env.REACT_APP_API_URL': JSON.stringify(process.env.REACT_APP_API_URL || '/api/orders'),
+        }),
     ],
     devServer: {
         static: [

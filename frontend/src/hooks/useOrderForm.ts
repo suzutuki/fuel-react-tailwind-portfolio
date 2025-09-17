@@ -3,7 +3,7 @@ import { OrderDetail, FormData } from "@/types/orderForm";
 import { DEFAULT_VALUES } from "@/constants/orderFormConstants";
 import { validateOrderForm, FormValidationResult } from "@/utils/validation";
 
-// API設定
+// API設定（本番環境用の直接指定）
 const API_BASE_URL = "/api/orders";
 
 const createDefaultOrderDetail = (id: number): OrderDetail => ({

@@ -7,7 +7,16 @@ class DB {
     public static function getConnection() {
         if (self::$connection === null) {
             try {
-                self::$connection = new PDO('sqlite:' . __DIR__ . '/../../../../orders.db');
+                // 本番環境とローカル環境でデータベース設定を分ける
+                if (getenv('DATABASE_URL')) {
+                    // 本番環境: PostgreSQL/MySQL
+                    self::$connection = new PDO(getenv('DATABASE_URL'));
+                } else {
+                    // ローカル環境: SQLite
+                    $dbPath = getenv('DB_PATH') ?: __DIR__ . '/../../../../orders.db';
+                    self::$connection = new PDO('sqlite:' . $dbPath);
+                }
+
                 self::$connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
                 self::createTables();
             } catch (PDOException $e) {
