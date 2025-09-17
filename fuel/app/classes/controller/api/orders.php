@@ -237,6 +237,13 @@ class Controller_Api_Orders
             $stmt->execute();
             $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+            // 各受注の明細も取得
+            foreach ($orders as &$order) {
+                $detailStmt = $conn->prepare("SELECT * FROM order_details WHERE order_id = ? ORDER BY id");
+                $detailStmt->execute([$order['id']]);
+                $order['order_details'] = $detailStmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+
             return $this->response(array(
                 'success' => true,
                 'orders' => $orders

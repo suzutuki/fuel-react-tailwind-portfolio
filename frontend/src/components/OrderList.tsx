@@ -11,6 +11,63 @@ interface Order {
     updated_at: string;
 }
 
+interface ApiOrder {
+    id: number;
+    receive_order_date: string;
+    contract_number: string;
+    max_vehicle: string;
+    store_code: string;
+    house_name: string;
+    property_postal_code: string;
+    property_prefecture: string;
+    property_address: string;
+    property_memo: string;
+    construction_manager: string;
+    construction_manager_phone: string;
+    delivery_destination_type: string;
+    delivery_postal_code: string;
+    delivery_prefecture: string;
+    delivery_address: string;
+    delivery_phone: string;
+    delivery_name: string;
+    contact_method: string;
+    fax: string;
+    email: string;
+    email2: string;
+    email3: string;
+    email_cc1: string;
+    email_cc2: string;
+    email_cc3: string;
+    delivery_response_person: string;
+    delivery_memo: string;
+    created_at: string;
+    updated_at: string;
+    order_details: Array<{
+        id: number;
+        order_id: number;
+        product_search: string;
+        product_name: string;
+        official_product_code: string;
+        specification_code: string;
+        quantity: number;
+        special_order_flag: string;
+        desired_purchase_date: string;
+        frequency_category: string;
+        arrival_date: string;
+        unit_weight: string;
+        unit: string;
+        carrier_code: string;
+        order_unit_price: string;
+        total_price: string;
+        delivery_unit_price: string;
+        total_delivery_unit_price: string;
+        customer_unit_price: string;
+        total_customer_unit_price: string;
+        created_at: string;
+        updated_at: string;
+    }>;
+}
+
 const OrderList: React.FC = () => {
     const [orders, setOrders] = useState<Order[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -21,10 +78,67 @@ const OrderList: React.FC = () => {
         fetchOrders();
     }, []);
 
+    const convertApiOrderToOrder = (apiOrder: ApiOrder): Order => {
+        return {
+            id: apiOrder.id,
+            created_at: apiOrder.created_at,
+            updated_at: apiOrder.updated_at,
+            formData: {
+                receiveOrderDate: apiOrder.receive_order_date,
+                contractNumber: apiOrder.contract_number,
+                maxVehicle: apiOrder.max_vehicle,
+                storeCode: apiOrder.store_code,
+                houseName: apiOrder.house_name,
+                propertyPostalCode: apiOrder.property_postal_code,
+                propertyPrefecture: apiOrder.property_prefecture,
+                propertyAddress: apiOrder.property_address,
+                propertyMemo: apiOrder.property_memo,
+                constructionManager: apiOrder.construction_manager,
+                constructionManagerPhone: apiOrder.construction_manager_phone,
+                deliveryDestinationType: apiOrder.delivery_destination_type,
+                deliveryPostalCode: apiOrder.delivery_postal_code,
+                deliveryPrefecture: apiOrder.delivery_prefecture,
+                deliveryAddress: apiOrder.delivery_address,
+                deliveryPhone: apiOrder.delivery_phone,
+                deliveryName: apiOrder.delivery_name,
+                contactMethod: apiOrder.contact_method,
+                fax: apiOrder.fax,
+                email: apiOrder.email,
+                email2: apiOrder.email2,
+                email3: apiOrder.email3,
+                emailCc1: apiOrder.email_cc1,
+                emailCc2: apiOrder.email_cc2,
+                emailCc3: apiOrder.email_cc3,
+                deliveryResponsePerson: apiOrder.delivery_response_person,
+                deliveryMemo: apiOrder.delivery_memo
+            },
+            orderDetails: apiOrder.order_details.map(detail => ({
+                productSearch: detail.product_search,
+                productName: detail.product_name,
+                officialProductCode: detail.official_product_code,
+                specificationCode: detail.specification_code,
+                quantity: detail.quantity,
+                specialOrderFlag: detail.special_order_flag,
+                desiredPurchaseDate: detail.desired_purchase_date,
+                frequencyCategory: detail.frequency_category,
+                arrivalDate: detail.arrival_date,
+                unitWeight: detail.unit_weight,
+                unit: detail.unit,
+                carrierCode: detail.carrier_code,
+                orderUnitPrice: detail.order_unit_price,
+                totalPrice: detail.total_price,
+                deliveryUnitPrice: detail.delivery_unit_price,
+                totalDeliveryUnitPrice: detail.total_delivery_unit_price,
+                customerUnitPrice: detail.customer_unit_price,
+                totalCustomerUnitPrice: detail.total_customer_unit_price
+            }))
+        };
+    };
+
     const fetchOrders = async () => {
         try {
             setIsLoading(true);
-            const response = await fetch('/api/orders');
+            const response = await fetch('/api/orders/list');
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -33,7 +147,8 @@ const OrderList: React.FC = () => {
             const result = await response.json();
             
             if (result.success) {
-                setOrders(result.orders || []);
+                const convertedOrders = result.orders.map((apiOrder: ApiOrder) => convertApiOrderToOrder(apiOrder));
+                setOrders(convertedOrders);
             } else {
                 throw new Error(result.message || '受注一覧の取得に失敗しました');
             }
@@ -92,132 +207,81 @@ const OrderList: React.FC = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
-            <div className="max-w-7xl mx-auto">
+        <div className="min-h-screen bg-white p-4">
+            <div className="max-w-4xl mx-auto">
                 <div className="mb-6">
-                    <h1 className="text-3xl font-bold text-gray-900 mb-2">受注一覧</h1>
-                    <p className="text-gray-600">保存された受注情報を確認できます</p>
+                    <h1 className="text-2xl font-bold text-gray-900 mb-1">受注一覧</h1>
+                    <p className="text-gray-500 text-sm">受注情報の確認</p>
                 </div>
 
                 {orders.length === 0 ? (
-                    <Card>
-                        <CardContent className="p-6">
-                            <div className="text-center">
-                                <p className="text-gray-600 mb-4">まだ受注データがありません</p>
-                                <Button onClick={fetchOrders} variant="outline">
-                                    再読み込み
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <div className="text-center py-12">
+                        <p className="text-gray-500 mb-4">受注データがありません</p>
+                        <Button onClick={fetchOrders} variant="outline" size="sm">
+                            再読み込み
+                        </Button>
+                    </div>
                 ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-2">
                         {orders.map((order) => (
-                            <Card key={order.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                                <CardHeader 
-                                    onClick={() => handleOrderClick(order)}
-                                    className="pb-4"
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <CardTitle className="text-lg">
-                                            受注ID: {order.id}
-                                        </CardTitle>
-                                        <div className="text-sm text-gray-500">
-                                            {formatDate(order.created_at)}
-                                        </div>
+                            <div key={order.id}
+                                 className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                                 onClick={() => handleOrderClick(order)}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <span className="text-sm font-medium text-blue-600">
+                                            #{order.id}
+                                        </span>
+                                        <span className="text-sm text-gray-900">
+                                            {order.formData.houseName || '物件名未設定'}
+                                        </span>
+                                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                            {order.orderDetails.length}件
+                                        </span>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm text-gray-600">
-                                        <div>
-                                            <span className="font-medium">契約番号:</span> {order.formData.contractNumber || '未設定'}
-                                        </div>
-                                        <div>
-                                            <span className="font-medium">物件名:</span> {order.formData.houseName || '未設定'}
-                                        </div>
-                                        <div>
-                                            <span className="font-medium">アイテム数:</span> {order.orderDetails.length}件
-                                        </div>
+                                    <div className="text-xs text-gray-500">
+                                        {formatDate(order.created_at)}
                                     </div>
-                                </CardHeader>
+                                </div>
 
                                 {selectedOrder?.id === order.id && (
-                                    <CardContent className="border-t bg-gray-50">
-                                        <div className="space-y-6 pt-4">
-                                            {/* 基本情報 */}
-                                            <div>
-                                                <h3 className="text-lg font-semibold mb-3 text-gray-900">基本情報</h3>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                                    <div><span className="font-medium">受注日:</span> {order.formData.receiveOrderDate}</div>
-                                                    <div><span className="font-medium">契約番号:</span> {order.formData.contractNumber}</div>
-                                                    <div><span className="font-medium">最大車輌:</span> {order.formData.maxVehicle}</div>
-                                                    <div><span className="font-medium">店コード:</span> {order.formData.storeCode}</div>
-                                                </div>
+                                    <div className="mt-4 pt-4 border-t border-gray-100">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                            <div className="space-y-2 text-sm">
+                                                <div><span className="text-gray-500">契約番号:</span> {order.formData.contractNumber || '未設定'}</div>
+                                                <div><span className="text-gray-500">受注日:</span> {order.formData.receiveOrderDate || '未設定'}</div>
+                                                <div><span className="text-gray-500">配送先:</span> {order.formData.deliveryName || '未設定'}</div>
                                             </div>
-
-                                            {/* 物件情報 */}
-                                            <div>
-                                                <h3 className="text-lg font-semibold mb-3 text-gray-900">物件情報</h3>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                                    <div><span className="font-medium">物件名:</span> {order.formData.houseName}</div>
-                                                    <div><span className="font-medium">郵便番号:</span> {order.formData.propertyPostalCode}</div>
-                                                    <div><span className="font-medium">都道府県:</span> {order.formData.propertyPrefecture}</div>
-                                                    <div><span className="font-medium">住所:</span> {order.formData.propertyAddress}</div>
-                                                </div>
-                                                {order.formData.propertyMemo && (
-                                                    <div className="mt-2">
-                                                        <span className="font-medium">メモ:</span> {order.formData.propertyMemo}
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* 配送情報 */}
-                                            <div>
-                                                <h3 className="text-lg font-semibold mb-3 text-gray-900">配送情報</h3>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                                    <div><span className="font-medium">配送先:</span> {order.formData.deliveryDestinationType}</div>
-                                                    <div><span className="font-medium">配送先名:</span> {order.formData.deliveryName}</div>
-                                                    <div><span className="font-medium">配送先電話:</span> {order.formData.deliveryPhone}</div>
-                                                    <div><span className="font-medium">住所:</span> {order.formData.deliveryAddress}</div>
-                                                </div>
-                                            </div>
-
-                                            {/* 受注明細 */}
-                                            <div>
-                                                <h3 className="text-lg font-semibold mb-3 text-gray-900">受注明細</h3>
-                                                <div className="overflow-x-auto">
-                                                    <table className="min-w-full divide-y divide-gray-200">
-                                                        <thead className="bg-gray-100">
-                                                            <tr>
-                                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">商品名</th>
-                                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">数量</th>
-                                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">希望仕入日</th>
-                                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">単価</th>
-                                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">合計</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="bg-white divide-y divide-gray-200">
-                                                            {order.orderDetails.map((detail, index) => (
-                                                                <tr key={index}>
-                                                                    <td className="px-3 py-2 text-sm text-gray-900">{detail.productName || '未設定'}</td>
-                                                                    <td className="px-3 py-2 text-sm text-gray-900">{detail.quantity}</td>
-                                                                    <td className="px-3 py-2 text-sm text-gray-900">{detail.desiredPurchaseDate || '未設定'}</td>
-                                                                    <td className="px-3 py-2 text-sm text-gray-900">{detail.orderUnitPrice || '未設定'}</td>
-                                                                    <td className="px-3 py-2 text-sm text-gray-900">{detail.totalPrice || '未設定'}</td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
+                                            <div className="space-y-2 text-sm">
+                                                <div><span className="text-gray-500">店コード:</span> {order.formData.storeCode || '未設定'}</div>
+                                                <div><span className="text-gray-500">最大車輌:</span> {order.formData.maxVehicle || '未設定'}</div>
+                                                <div><span className="text-gray-500">電話:</span> {order.formData.deliveryPhone || '未設定'}</div>
                                             </div>
                                         </div>
-                                    </CardContent>
+
+                                        {order.orderDetails.length > 0 && (
+                                            <div className="mt-4">
+                                                <h4 className="text-sm font-medium text-gray-700 mb-2">注文商品</h4>
+                                                <div className="space-y-1">
+                                                    {order.orderDetails.map((detail, index) => (
+                                                        <div key={index} className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded">
+                                                            <span>{detail.productName || '商品名未設定'}</span>
+                                                            <span className="text-gray-500">{detail.quantity}個</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
-                            </Card>
+                            </div>
                         ))}
                     </div>
                 )}
 
-                <div className="mt-6">
-                    <Button onClick={fetchOrders} variant="outline">
+                <div className="mt-6 text-center">
+                    <Button onClick={fetchOrders} variant="outline" size="sm">
                         再読み込み
                     </Button>
                 </div>
