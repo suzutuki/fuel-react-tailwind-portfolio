@@ -42,50 +42,67 @@ const OrderFormApp: React.FC<OrderFormAppProps> = ({ onBack }) => {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
-            <div className="max-w-7xl mx-auto">
-                {/* Back Button */}
-                {onBack && (
-                    <div className="mb-4">
-                        <Button onClick={onBack} variant="outline">
-                            ← ホームに戻る
-                        </Button>
+        <div className="min-h-screen bg-gray-50">
+            {/* Header */}
+            <header className="bg-white border-b border-gray-200">
+                <div className="container mx-auto px-4 sm:px-6 py-6">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                            {onBack && (
+                                <button
+                                    onClick={onBack}
+                                    className="text-gray-500 hover:text-black px-4 py-2 text-sm font-medium transition-colors duration-200 border border-gray-300 hover:border-black"
+                                >
+                                    ← ホームに戻る
+                                </button>
+                            )}
+                            <div>
+                                <h1 className="text-2xl font-light text-gray-900 tracking-wide flex items-center gap-3">
+                                    <Package className="h-6 w-6 text-gray-600" />
+                                    受注新規登録
+                                </h1>
+                                <p className="text-gray-600 text-sm mt-1">
+                                    FAX・メールなどの受注登録
+                                </p>
+                            </div>
+                        </div>
                     </div>
-                )}
-                
-                {/* Header */}
-                <Card className="mb-6">
-                    <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-                        <CardTitle className="text-2xl font-bold flex items-center gap-2">
-                            <Package className="h-6 w-6" />
-                            受注新規登録
-                        </CardTitle>
-                        <p className="text-blue-100">
-                            FAX・メールなどの受注登録
-                        </p>
-                    </CardHeader>
-                </Card>
+                </div>
+            </header>
+
+            <div className="container mx-auto px-4 sm:px-6 py-8">
+                <div className="max-w-6xl mx-auto">
 
                 {/* Form */}
-                <Card>
-                    <CardContent className="p-6">
+                <div className="bg-white border border-gray-200">
+                    <div className="p-6 sm:p-8">
                         <Tabs value={currentTab} onValueChange={setCurrentTab}>
-                            <TabsList className="grid w-full grid-cols-2">
-                                <TabsTrigger
-                                    value="basic"
-                                    className="flex items-center gap-2"
-                                >
-                                    <Home className="h-4 w-4" />
-                                    基本情報
-                                </TabsTrigger>
-                                <TabsTrigger
-                                    value="details"
-                                    className="flex items-center gap-2"
-                                >
-                                    <Package className="h-4 w-4" />
-                                    明細情報
-                                </TabsTrigger>
-                            </TabsList>
+                            <div className="border-b border-gray-200 mb-8">
+                                <nav className="flex space-x-8">
+                                    <button
+                                        onClick={() => setCurrentTab("basic")}
+                                        className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center gap-2 ${
+                                            currentTab === "basic"
+                                                ? "border-black text-black"
+                                                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                                        }`}
+                                    >
+                                        <Home className="h-4 w-4" />
+                                        基本情報
+                                    </button>
+                                    <button
+                                        onClick={() => setCurrentTab("details")}
+                                        className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center gap-2 ${
+                                            currentTab === "details"
+                                                ? "border-black text-black"
+                                                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                                        }`}
+                                    >
+                                        <Package className="h-4 w-4" />
+                                        明細情報
+                                    </button>
+                                </nav>
+                            </div>
 
                             {/* Basic Info Tab */}
                             <TabsContent
@@ -109,14 +126,13 @@ const OrderFormApp: React.FC<OrderFormAppProps> = ({ onBack }) => {
                                     handleInputChange={handleInputChange}
                                 />
 
-                                <div className="text-center pt-6">
-                                    <Button
+                                <div className="text-center pt-8">
+                                    <button
                                         onClick={() => setCurrentTab("details")}
-                                        size="lg"
-                                        className="px-8 py-3 text-lg"
+                                        className="bg-black text-white px-8 py-3 text-sm font-medium tracking-wide uppercase hover:bg-gray-800 transition-colors duration-300 border border-black hover:border-gray-800"
                                     >
-                                        明細情報へ（Ctrl+Shift+X）
-                                    </Button>
+                                        明細情報へ
+                                    </button>
                                 </div>
                             </TabsContent>
 
@@ -126,17 +142,16 @@ const OrderFormApp: React.FC<OrderFormAppProps> = ({ onBack }) => {
                                 className="space-y-6 mt-6"
                             >
                                 <div className="flex justify-between items-center">
-                                    <h3 className="text-lg font-semibold">
+                                    <h3 className="text-lg font-medium text-gray-900 tracking-wide">
                                         受注明細
                                     </h3>
-                                    <Button
+                                    <button
                                         onClick={addOrderDetail}
-                                        className="flex items-center gap-2"
-                                        variant="outline"
+                                        className="flex items-center gap-2 border border-gray-300 hover:border-black text-gray-700 hover:text-black px-4 py-2 text-sm font-medium transition-colors duration-200"
                                     >
                                         <Plus className="h-4 w-4" />
                                         新規
-                                    </Button>
+                                    </button>
                                 </div>
 
                                 {orderDetails.map((detail, index) => (
@@ -150,74 +165,66 @@ const OrderFormApp: React.FC<OrderFormAppProps> = ({ onBack }) => {
                                     />
                                 ))}
 
-                                <div className="text-center pt-6">
-                                    <Button
+                                <div className="text-center pt-8">
+                                    <button
                                         onClick={() => setCurrentTab("basic")}
-                                        variant="outline"
-                                        size="lg"
-                                        className="mr-4"
+                                        className="border border-gray-300 hover:border-black text-gray-700 hover:text-black px-8 py-3 text-sm font-medium tracking-wide uppercase transition-colors duration-200"
                                     >
-                                        基本情報へ戻る（Ctrl+Shift+X）
-                                    </Button>
+                                        基本情報へ戻る
+                                    </button>
                                 </div>
                             </TabsContent>
                         </Tabs>
 
                         {/* Save Status */}
                         {saveStatus !== 'idle' && (
-                            <div className="text-center mb-4">
+                            <div className="text-center mb-6 pt-4 border-t border-gray-200">
                                 {saveStatus === 'saving' && (
-                                    <p className="text-blue-600">保存中...</p>
+                                    <p className="text-gray-600 text-sm">保存中...</p>
                                 )}
                                 {saveStatus === 'saved' && (
-                                    <p className="text-green-600">正常に保存されました</p>
+                                    <p className="text-gray-900 text-sm font-medium">正常に保存されました</p>
                                 )}
                                 {saveStatus === 'error' && (
-                                    <p className="text-red-600">保存に失敗しました</p>
+                                    <p className="text-gray-700 text-sm">保存に失敗しました</p>
                                 )}
                             </div>
                         )}
 
                         {/* Form Actions */}
-                        <div className="flex justify-center space-x-4 mt-8 pt-6 border-t">
-                            <Button
+                        <div className="flex flex-wrap justify-center gap-3 mt-8 pt-8 border-t border-gray-200">
+                            <button
                                 onClick={submitForm}
-                                size="lg"
-                                className="px-8 py-3 text-lg bg-green-600 hover:bg-green-700"
+                                className="bg-black text-white px-6 py-3 text-sm font-medium tracking-wide uppercase hover:bg-gray-800 transition-colors duration-300 border border-black hover:border-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
                                 disabled={isLoading}
                             >
                                 {isLoading ? "保存中..." : "登録"}
-                            </Button>
-                            <Button
+                            </button>
+                            <button
                                 onClick={saveDraft}
-                                variant="outline"
-                                size="lg"
-                                className="px-6 py-3 text-lg bg-blue-600 hover:bg-blue-700 text-white"
+                                className="bg-gray-100 text-gray-900 px-6 py-3 text-sm font-medium tracking-wide uppercase hover:bg-gray-200 transition-colors duration-300 border border-gray-300 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
                                 disabled={isLoading}
                             >
                                 下書き保存
-                            </Button>
-                            <Button
+                            </button>
+                            <button
                                 onClick={handleReset}
-                                variant="outline"
-                                size="lg"
-                                className="px-8 py-3 text-lg"
+                                className="border border-gray-300 hover:border-black text-gray-700 hover:text-black px-6 py-3 text-sm font-medium tracking-wide uppercase transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                 disabled={isLoading}
                             >
                                 リセット
-                            </Button>
-                            <Button
+                            </button>
+                            <button
                                 onClick={clearDraft}
-                                variant="outline"
-                                size="lg"
-                                className="px-6 py-3 text-lg border-red-300 text-red-600 hover:bg-red-50"
+                                className="border border-gray-400 hover:border-gray-600 text-gray-600 hover:text-gray-800 px-6 py-3 text-sm font-medium tracking-wide uppercase transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                 disabled={isLoading}
                             >
                                 下書き削除
-                            </Button>
+                            </button>
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </div>
+                </div>
             </div>
         </div>
     );
