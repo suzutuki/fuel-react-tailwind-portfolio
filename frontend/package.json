@@ -1,7 +1,7 @@
 {
   "name": "fuel-react-app",
   "version": "1.0.0",
-  "description": "FuelPHP with React, TypeScript and TailwindCSS",
+  "description": "Laravel with React, TypeScript and TailwindCSS",
   "main": "src/index.tsx",
   "scripts": {
     "dev": "webpack serve --mode development",

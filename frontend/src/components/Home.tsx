@@ -112,10 +112,10 @@ const Home: React.FC = () => {
                                     </div>
                                 </div>
                                 <h3 className="text-sm font-medium text-gray-900 mb-3 tracking-wide uppercase">
-                                    FuelPHP
+                                    Laravel
                                 </h3>
                                 <p className="text-gray-500 text-sm leading-relaxed">
-                                    軽量で柔軟なフレームワーク
+                                    エレガントで表現力豊かなフレームワーク
                                 </p>
                             </div>
                         </div>
