@@ -227,5 +227,5 @@ const OrderFormApp: React.FC<OrderFormAppProps> = ({ onBack }) => {
         </div>
     );
 };
-
+// OrderFormAppコンポーネントをエクスポート
 export default OrderFormApp;
