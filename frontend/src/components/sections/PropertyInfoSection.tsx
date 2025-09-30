@@ -1,52 +1,78 @@
 import React from "react";
 import { InputField, TextareaField } from "@/components/ui/form-fields";
-import { Home } from "lucide-react";
+import { Home, Search } from "lucide-react";
 import { FormData } from "@/types/orderForm";
+import { usePostalCode } from "@/hooks/usePostalCode";
 
 interface PropertyInfoSectionProps {
     formData: Pick<FormData, 'houseName' | 'propertyPostalCode' | 'propertyPrefecture' | 'propertyAddress' | 'propertyMemo' | 'constructionManager' | 'constructionManagerPhone'>;
     handleInputChange: (field: string, value: string) => void;
 }
 
-export const PropertyInfoSection: React.FC<PropertyInfoSectionProps> = ({ 
-    formData, 
-    handleInputChange 
-}) => (
-    <div className="border-t pt-6">
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Home className="h-5 w-5" />
-            物件情報
-        </h3>
+export const PropertyInfoSection: React.FC<PropertyInfoSectionProps> = ({
+    formData,
+    handleInputChange
+}) => {
+    const { fetchAddress, isLoading, error } = usePostalCode();
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <InputField
-                label="物件名(邸名)"
-                required
-                placeholder="例:山田 太郎"
-                value={formData.houseName}
-                onChange={(e) => handleInputChange("houseName", e.target.value)}
-            />
+    const handlePostalCodeSearch = async () => {
+        const result = await fetchAddress(formData.propertyPostalCode);
+        if (result) {
+            handleInputChange("propertyPrefecture", result.prefecture);
+            handleInputChange("propertyAddress", `${result.address1}${result.address2}`);
+        } else if (error) {
+            alert(error);
+        }
+    };
 
-            <InputField
-                label="物件郵便番号"
-                required
-                placeholder="例:1234567"
-                value={formData.propertyPostalCode}
-                onChange={(e) =>
-                    handleInputChange("propertyPostalCode", e.target.value)
-                }
-            />
+    return (
+        <div className="border-t pt-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Home className="h-5 w-5" />
+                物件情報
+            </h3>
 
-            <InputField
-                label="物件都道府県"
-                required
-                placeholder="例:東京都"
-                value={formData.propertyPrefecture}
-                onChange={(e) =>
-                    handleInputChange("propertyPrefecture", e.target.value)
-                }
-            />
-        </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <InputField
+                    label="物件名(邸名)"
+                    required
+                    placeholder="例:山田 太郎"
+                    value={formData.houseName}
+                    onChange={(e) => handleInputChange("houseName", e.target.value)}
+                />
+
+                <div className="relative">
+                    <InputField
+                        label="物件郵便番号"
+                        required
+                        placeholder="例:1234567"
+                        value={formData.propertyPostalCode}
+                        onChange={(e) =>
+                            handleInputChange("propertyPostalCode", e.target.value)
+                        }
+                    />
+                    <button
+                        type="button"
+                        onClick={handlePostalCodeSearch}
+                        disabled={isLoading || !formData.propertyPostalCode}
+                        className="absolute right-2 top-[38px] bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 text-xs font-medium transition-colors duration-200 border border-gray-300 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                        title="郵便番号から住所を検索"
+                    >
+                        <Search className="h-3 w-3" />
+                        {isLoading ? "検索中..." : "住所検索"}
+                    </button>
+                </div>
+
+                <InputField
+                    label="物件都道府県"
+                    required
+                    placeholder="例:東京都"
+                    value={formData.propertyPrefecture}
+                    onChange={(e) =>
+                        handleInputChange("propertyPrefecture", e.target.value)
+                    }
+                />
+            </div>
 
         <InputField
             label="物件住所"
@@ -90,5 +116,5 @@ export const PropertyInfoSection: React.FC<PropertyInfoSectionProps> = ({
                 }
             />
         </div>
-    </div>
-);
+    );
+};

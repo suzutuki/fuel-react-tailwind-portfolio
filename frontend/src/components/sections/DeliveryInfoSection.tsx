@@ -1,18 +1,31 @@
 import React from "react";
 import { InputField, SelectField } from "@/components/ui/form-fields";
-import { Truck } from "lucide-react";
+import { Truck, Search } from "lucide-react";
 import { DELIVERY_TYPE_OPTIONS } from "@/constants/orderFormConstants";
 import { FormData } from "@/types/orderForm";
+import { usePostalCode } from "@/hooks/usePostalCode";
 
 interface DeliveryInfoSectionProps {
     formData: Pick<FormData, 'deliveryDestinationType' | 'deliveryPostalCode' | 'deliveryPrefecture' | 'deliveryAddress' | 'deliveryPhone' | 'deliveryName'>;
     handleInputChange: (field: string, value: string) => void;
 }
 
-export const DeliveryInfoSection: React.FC<DeliveryInfoSectionProps> = ({ 
-    formData, 
-    handleInputChange 
+export const DeliveryInfoSection: React.FC<DeliveryInfoSectionProps> = ({
+    formData,
+    handleInputChange
 }) => {
+    const { fetchAddress, isLoading, error } = usePostalCode();
+
+    const handlePostalCodeSearch = async () => {
+        const result = await fetchAddress(formData.deliveryPostalCode);
+        if (result) {
+            handleInputChange("deliveryPrefecture", result.prefecture);
+            handleInputChange("deliveryAddress", `${result.address1}${result.address2}`);
+        } else if (error) {
+            alert(error);
+        }
+    };
+
     return (
         <div className="border-t pt-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -31,15 +44,27 @@ export const DeliveryInfoSection: React.FC<DeliveryInfoSectionProps> = ({
                     }
                 />
 
-                <InputField
-                    label="納品先郵便番号"
-                    required
-                    placeholder="例:1234567"
-                    value={formData.deliveryPostalCode}
-                    onChange={(e) =>
-                        handleInputChange("deliveryPostalCode", e.target.value)
-                    }
-                />
+                <div className="relative">
+                    <InputField
+                        label="納品先郵便番号"
+                        required
+                        placeholder="例:1234567"
+                        value={formData.deliveryPostalCode}
+                        onChange={(e) =>
+                            handleInputChange("deliveryPostalCode", e.target.value)
+                        }
+                    />
+                    <button
+                        type="button"
+                        onClick={handlePostalCodeSearch}
+                        disabled={isLoading || !formData.deliveryPostalCode}
+                        className="absolute right-2 top-[38px] bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 text-xs font-medium transition-colors duration-200 border border-gray-300 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                        title="郵便番号から住所を検索"
+                    >
+                        <Search className="h-3 w-3" />
+                        {isLoading ? "検索中..." : "住所検索"}
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
