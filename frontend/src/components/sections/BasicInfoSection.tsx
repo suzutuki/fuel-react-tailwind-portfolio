@@ -6,7 +6,7 @@ import { FormData } from "@/types/orderForm";
 
 interface BasicInfoSectionProps {
     formData: Pick<FormData, 'receiveOrderDate' | 'contractNumber' | 'maxVehicle' | 'storeCode'>;
-    handleInputChange: (field: string, value: string) => void;
+    handleInputChange: (field: keyof FormData, value: string) => void;
 }
 
 export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({ 

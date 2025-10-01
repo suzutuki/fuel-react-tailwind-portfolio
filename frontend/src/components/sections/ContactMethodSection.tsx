@@ -6,7 +6,7 @@ import { FormData } from "@/types/orderForm";
 
 interface ContactMethodSectionProps {
     formData: Pick<FormData, 'contactMethod' | 'fax' | 'deliveryResponsePerson' | 'email' | 'email2' | 'email3' | 'emailCc1' | 'emailCc2' | 'emailCc3' | 'deliveryMemo'>;
-    handleInputChange: (field: string, value: string) => void;
+    handleInputChange: (field: keyof FormData, value: string) => void;
 }
 
 export const ContactMethodSection: React.FC<ContactMethodSectionProps> = ({ 
@@ -88,21 +88,24 @@ export const ContactMethodSection: React.FC<ContactMethodSectionProps> = ({
                 />
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {[1, 2, 3].map((num) => (
-                        <InputField
-                            key={num}
-                            label={`CCメールアドレス${num}`}
-                            type="email"
-                            placeholder={`例: cc${num}@example.com`}
-                            value={formData[`emailCc${num}` as keyof FormData]}
-                            onChange={(e) =>
-                                handleInputChange(
-                                    `emailCc${num}`,
-                                    e.target.value
-                                )
-                            }
-                        />
-                    ))}
+                    {[1, 2, 3].map((num) => {
+                        const fieldName = `emailCc${num}` as keyof Pick<FormData, 'emailCc1' | 'emailCc2' | 'emailCc3'>;
+                        return (
+                            <InputField
+                                key={num}
+                                label={`CCメールアドレス${num}`}
+                                type="email"
+                                placeholder={`例: cc${num}@example.com`}
+                                value={formData[fieldName]}
+                                onChange={(e) =>
+                                    handleInputChange(
+                                        fieldName,
+                                        e.target.value
+                                    )
+                                }
+                            />
+                        );
+                    })}
                 </div>
 
                 <TextareaField

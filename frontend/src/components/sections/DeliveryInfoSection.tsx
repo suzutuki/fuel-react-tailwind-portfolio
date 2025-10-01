@@ -7,7 +7,7 @@ import { usePostalCode } from "@/hooks/usePostalCode";
 
 interface DeliveryInfoSectionProps {
     formData: Pick<FormData, 'deliveryDestinationType' | 'deliveryPostalCode' | 'deliveryPrefecture' | 'deliveryAddress' | 'deliveryPhone' | 'deliveryName'>;
-    handleInputChange: (field: string, value: string) => void;
+    handleInputChange: (field: keyof FormData, value: string) => void;
 }
 
 export const DeliveryInfoSection: React.FC<DeliveryInfoSectionProps> = ({
