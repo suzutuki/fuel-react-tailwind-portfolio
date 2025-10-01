@@ -10,25 +10,41 @@ import { DeliveryInfoSection } from "@/components/sections/DeliveryInfoSection";
 import { ContactMethodSection } from "@/components/sections/ContactMethodSection";
 import { OrderDetailCard } from "@/components/order/OrderDetailCard";
 
+/**
+ * OrderFormAppのプロパティ型定義
+ */
 interface OrderFormAppProps {
+    /** ホーム画面に戻るためのコールバック関数 */
     onBack?: () => void;
 }
 
+/**
+ * 受注フォームのメインコンポーネント
+ * FAX・メールなどの受注情報を登録するための画面を提供
+ *
+ * 主な機能:
+ * - 基本情報と明細情報をタブで切り替えて入力
+ * - 下書き保存・復元機能（localStorageを使用）
+ * - フォームのリセット・削除機能
+ */
 const OrderFormApp: React.FC<OrderFormAppProps> = ({ onBack }) => {
+    // タブの表示状態を管理（"basic": 基本情報、"details": 明細情報）
     const [currentTab, setCurrentTab] = useState("basic");
+
+    // カスタムフックからフォーム管理に必要な機能を取得
     const {
-        formData,
-        orderDetails,
-        isLoading,
-        saveStatus,
-        handleInputChange,
-        handleDetailChange,
-        addOrderDetail,
-        removeOrderDetail,
-        resetForm,
-        submitForm,
-        saveDraft,
-        clearDraft,
+        formData,          // フォームの入力データ
+        orderDetails,      // 受注明細のリスト
+        isLoading,         // 送信中の状態
+        saveStatus,        // 保存ステータス（idle/saving/saved/error）
+        handleInputChange, // 入力変更ハンドラ
+        handleDetailChange,// 明細変更ハンドラ
+        addOrderDetail,    // 明細追加関数
+        removeOrderDetail, // 明細削除関数
+        resetForm,         // フォームリセット関数
+        submitForm,        // フォーム送信関数
+        saveDraft,         // 下書き保存関数
+        clearDraft,        // 下書き削除関数
     } = useOrderForm();
 
     const handleReset = () => {
