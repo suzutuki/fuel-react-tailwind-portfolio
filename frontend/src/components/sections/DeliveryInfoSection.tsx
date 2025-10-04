@@ -5,23 +5,54 @@ import { DELIVERY_TYPE_OPTIONS } from "@/constants/orderFormConstants";
 import { FormData } from "@/types/orderForm";
 import { usePostalCode } from "@/hooks/usePostalCode";
 
+/**
+ * DeliveryInfoSectionコンポーネントのプロパティ型定義
+ */
 interface DeliveryInfoSectionProps {
+    /** フォームデータ（納品先関連のフィールドのみ） */
     formData: Pick<FormData, 'deliveryDestinationType' | 'deliveryPostalCode' | 'deliveryPrefecture' | 'deliveryAddress' | 'deliveryPhone' | 'deliveryName'>;
+    /** フォームの入力値変更時のハンドラ関数 */
     handleInputChange: (field: keyof FormData, value: string) => void;
 }
 
+/**
+ * 納品先情報入力セクションコンポーネント
+ *
+ * 主な機能:
+ * - 納品先区分の選択（現場/店舗/その他）
+ * - 郵便番号入力と住所自動検索機能
+ * - 都道府県、住所の入力
+ * - 電話番号、宛名の入力
+ *
+ * @remarks
+ * 郵便番号検索機能では、zipcloud APIを利用して郵便番号から住所を自動取得します
+ */
 export const DeliveryInfoSection: React.FC<DeliveryInfoSectionProps> = ({
     formData,
     handleInputChange
 }) => {
+    // 郵便番号から住所を検索するためのカスタムフック
     const { fetchAddress, isLoading, error } = usePostalCode();
 
+    /**
+     * 郵便番号検索ボタンのクリックハンドラ
+     *
+     * 処理の流れ:
+     * 1. 入力された郵便番号を使用してAPIから住所情報を取得
+     * 2. 取得成功時：都道府県と住所のフィールドに自動入力
+     * 3. 取得失敗時：エラーメッセージをアラート表示
+     */
     const handlePostalCodeSearch = async () => {
+        // fetchAddressで郵便番号APIを呼び出し
         const result = await fetchAddress(formData.deliveryPostalCode);
+
         if (result) {
+            // 住所取得成功時：都道府県と住所を自動入力
             handleInputChange("deliveryPrefecture", result.prefecture);
+            // address1（市区町村）とaddress2（町域）を結合して入力
             handleInputChange("deliveryAddress", `${result.address1}${result.address2}`);
         } else if (error) {
+            // エラー時：エラーメッセージを表示
             alert(error);
         }
     };
