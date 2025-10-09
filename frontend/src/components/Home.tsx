@@ -27,6 +27,7 @@ const Home: React.FC = () => {
 
     // ページの表示制御
     if (currentPage === 'orderForm') {
+        // OrderFormAppコンポーネントを表示
         return <OrderFormApp onBack={handleBackToHome} />;
     }
 
@@ -186,7 +187,7 @@ const Home: React.FC = () => {
                 <div className="container mx-auto px-6">
                     <div className="text-center">
                         <p className="text-gray-400 text-sm tracking-wide">
-                            &copy; 2024 Portfolio. All rights reserved.
+                            &copy; 2025 Portfolio. All rights reserved.
                         </p>
                     </div>
                 </div>
