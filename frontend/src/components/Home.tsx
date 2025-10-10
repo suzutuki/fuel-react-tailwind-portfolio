@@ -4,7 +4,7 @@ import OrderFormApp from "./OrderFormApp";
 import OrderList from "./OrderList";
 
 type PageType = 'home' | 'orderForm' | 'orderList';
-
+// 
 const Home: React.FC = () => {
     const [currentPage, setCurrentPage] = useState<PageType>('home');
     const [isLoaded, setIsLoaded] = useState(false);
@@ -195,5 +195,5 @@ const Home: React.FC = () => {
         </div>
     );
 };
-
+// Homeコンポーネントをエクスポート
 export default Home;
