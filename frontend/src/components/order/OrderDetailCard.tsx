@@ -33,7 +33,6 @@ interface OrderDetailCardProps {
  * - BasicInfoSection: 商品情報、特別注文、商品カテゴリ
  * - DeliveryInfoSection: 納品先情報
  * - PricingSection: 価格情報（単価、数量、金額）
- *
  * パフォーマンス最適化のためReact.memoでメモ化されており、
  * propsが変更されない限り再レンダリングされない。
  */
