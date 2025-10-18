@@ -4,7 +4,7 @@ import OrderFormApp from "./OrderFormApp";
 import OrderList from "./OrderList";
 
 type PageType = 'home' | 'orderForm' | 'orderList';
-// 
+// Homeコンポーネントを定義
 const Home: React.FC = () => {
     const [currentPage, setCurrentPage] = useState<PageType>('home');
     const [isLoaded, setIsLoaded] = useState(false);
