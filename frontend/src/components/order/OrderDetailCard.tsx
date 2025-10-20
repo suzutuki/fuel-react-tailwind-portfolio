@@ -27,14 +27,13 @@ interface OrderDetailCardProps {
 
 /**
  * 注文明細カードコンポーネント
- *
- * 1つの注文明細を表示・編集するためのカードコンポーネント。
+ * 1つの注文明細を表示・編集するためのカードコンポーネント
  * 以下のセクションで構成される：
  * - BasicInfoSection: 商品情報、特別注文、商品カテゴリ
  * - DeliveryInfoSection: 納品先情報
  * - PricingSection: 価格情報（単価、数量、金額）
  * パフォーマンス最適化のためReact.memoでメモ化されており、
- * propsが変更されない限り再レンダリングされない。
+ * propsが変更されない限り再レンダリングされない
  */
 export const OrderDetailCard: React.FC<OrderDetailCardProps> = memo(({
     detail,
